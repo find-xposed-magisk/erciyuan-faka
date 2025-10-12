@@ -12,6 +12,8 @@ use Kernel\Util\Context;
 use Kernel\Util\Plugin;
 use Kernel\Waf\Firewall;
 
+
+date_default_timezone_set("Asia/Shanghai");
 error_reporting(0);
 const BASE_PATH = __DIR__ . "/../";
 require(BASE_PATH . '/vendor/autoload.php');

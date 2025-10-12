@@ -495,7 +495,7 @@
                 }
             },
             height: "auto",
-            width: "1000px",
+            width: "auto",
             done: () => {
                 table.refresh();
             }

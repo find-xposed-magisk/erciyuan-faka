@@ -2,12 +2,18 @@
 declare(strict_types=1);
 
 
+use App\Consts\Hook;
+
 if (!function_exists("index_var")) {
     function index_var(): string
     {
         return set_script_var([
             "DEBUG" => DEBUG,
-            "CAT_ID" => (int)$_GET['cid']
+            "CAT_ID" => (int)$_GET['cid'],
+            "HACK_ROUTE_TABLE_COLUMNS" => hook(Hook::HACK_ROUTE_TABLE_COLUMNS),
+            "HACK_SUBMIT_FORM" => hook(Hook::HACK_SUBMIT_FORM),
+            "HACK_SUBMIT_TAB" => hook(Hook::HACK_SUBMIT_TAB),
+            "HACK_ROUTE_TABLE_SEARCH" => hook(Hook::HACK_ROUTE_TABLE_SEARCH)
         ]);
     }
 }

@@ -233,8 +233,8 @@ class Table {
 
                     component.popup({
                         submit: false,
-                        shadeClose : true,
-                        maxmin : false,
+                        shadeClose: true,
+                        maxmin: false,
                         tab: [
                             {
                                 name: util.plainText(item.name),
@@ -277,6 +277,26 @@ class Table {
      * @param button
      */
     setSearch(search, button = true) {
+        const hackSearch = getVar("HACK_ROUTE_TABLE_SEARCH");
+
+        if (hackSearch instanceof Array) {
+            hackSearch.forEach(item => {
+                if (this.queryUrl === item.route) {
+                    for (let i = 0; i < search.length; i++) {
+                        const column = search[i];
+                        if (column.name === item.name) {
+                            if (item.direction === "after") {
+                                search.splice(i + 1, 0, evalResults(item.code));
+                            } else {
+                                search.splice(i, 0, evalResults(item.code));
+                                i++;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         this.isShowToolbar = true;
         this.search = new Search(this.$toolbar, search, data => {
             this.$table.bootstrapTable('refresh', {

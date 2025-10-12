@@ -63,15 +63,19 @@ class Form {
                         d += this.textareaHtml(form);
                         break;
                     case 'editor':
+                        !form.uploadUrl && (form.uploadUrl = '/admin/api/upload/send');
                         d += this.editorHtml(form);
                         break;
                     case 'html':
                         d += this.htmlHtml(form);
                         break;
                     case 'image':
+                        !form.uploadUrl && (form.uploadUrl = '/admin/api/upload/send');
+                        !form.photoAlbumUrl && (form.photoAlbumUrl = '/admin/api/upload/get');
                         d += this.imageHtml(form);
                         break;
                     case 'file':
+                        !form.uploadUrl && (form.uploadUrl = '/admin/api/upload/send');
                         d += this.fileHtml(form);
                         break;
                     case 'treeCheckbox':
