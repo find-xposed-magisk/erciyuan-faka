@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Service\Bind;
 
+use App\Consts\Hook;
 use App\Model\Business;
 use App\Model\Card;
 use App\Model\Category;
@@ -20,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Kernel\Annotation\Inject;
 use Kernel\Exception\JSONException;
 use Kernel\Exception\RuntimeException;
+use Kernel\Plugin\Entity\Stock;
 use Kernel\Util\Decimal;
 
 class Shop implements \App\Service\Shop
@@ -294,6 +296,9 @@ class Shop implements \App\Service\Shop
         }
 
         if (!$commodity) throw new JSONException("商品不存在");
+
+        if (($hook = \hook(Hook::SERVICE_SHOP_GET_ITEM_STOCK, $commodity, $race, $sku)) instanceof Stock) return $hook->getStock();
+
         //对接商品
         if ($commodity->shared) {
             return $this->getSharedStock($commodity, $race, $sku);

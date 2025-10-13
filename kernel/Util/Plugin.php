@@ -7,6 +7,7 @@ namespace Kernel\Util;
 use App\Util\Opcache;
 use Kernel\Consts\Base;
 use Kernel\Container\Di;
+use Kernel\Plugin\Entity\Stock;
 
 class Plugin
 {
@@ -118,7 +119,7 @@ class Plugin
     /**
      * @param int $point
      * @param mixed ...$args
-     * @return void|mixed
+     * @return array|Stock|string|void
      * @throws \ReflectionException
      */
     public static function hook(int $point, mixed &...$args)
@@ -141,6 +142,8 @@ class Plugin
                         $results = [];
                     }
                     $results[] = $result;
+                } elseif ($result instanceof Stock) {
+                    return $result;
                 }
             }
 

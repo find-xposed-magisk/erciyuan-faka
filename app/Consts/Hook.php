@@ -179,4 +179,8 @@ interface Hook
     public const HACK_ROUTE_TABLE_SEARCH = 0x2006;
     public const HACK_SUBMIT_FORM = 0x9038;
     public const HACK_SUBMIT_TAB = 0x9039;
+
+
+    //Commodity $commodity, ?string $race, ?array $sku  :: Stock
+    public const SERVICE_SHOP_GET_ITEM_STOCK = 0x8000;
 }
