@@ -117,6 +117,7 @@ class Shared implements \App\Service\Shared
             'name' => $item['name'],
             'description' => $item['introduce'],
             'price' => $item['sku'][0]['stock_price'],
+            'user_price' => $item['sku'][0]['stock_price'],
             'cover' => $item['picture_url'],
             'factory_price' => $item['sku'][0]['stock_price'],
             'delivery_way' => 0,
@@ -129,7 +130,8 @@ class Shared implements \App\Service\Shared
             'inventory_hidden' => 0,
             'only_user' => 0,
             'purchase_count' => 0,
-            'minimum' => 0 //最低购买
+            'minimum' => 0, //最低购买，
+            'maximum' => 0
         ];
 
         $widget = json_decode($item['widget'] ?: "", true) ?: [];
@@ -153,12 +155,16 @@ class Shared implements \App\Service\Shared
         $arr['widget'] = json_encode($wid);
 
         $config = [];
+        $arr['stock'] = 0;
 
         foreach ($item['sku'] as $sku) {
             $config['category'][$sku['name']] = $sku['stock_price'];
             $config['shared_mapping'][$sku['name']] = $sku['id'];
+            if (is_numeric($sku['stock'])) {
+                $arr['stock'] += $sku['stock'];
+            }
         }
-
+        $arr['stock'] == 0 && $arr['stock'] = 10000000;
         $arr['config'] = Ini::toConfig($config);
 
         return $arr;
@@ -188,9 +194,21 @@ class Shared implements \App\Service\Shared
                 $category[$cateName]['children'][] = $this->createV4Item($item);
             }
 
-
             return array_values($category);
+        } elseif ($shared->type == 2) {
+            $a = $this->post($shared->domain . "/shared/commodity/items", $shared->app_id, $shared->app_key);
+
+            foreach ($a as &$a1) {
+                if (is_array($a1['children'])) {
+                    foreach ($a1['children'] as &$a2) {
+                        $a2['stock'] = '10000000';
+                    }
+                }
+            }
+
+            return $a;
         }
+
 
         return $this->post($shared->domain . "/shared/commodity/items", $shared->app_id, $shared->app_key);
     }
@@ -204,6 +222,35 @@ class Shared implements \App\Service\Shared
      */
     public function item(\App\Model\Shared $shared, string $code): array
     {
+        if ($shared->type == 1) {
+            $data = $this->mcyRequest($shared->domain . "/plugin/open-api/item", $shared->app_id, $shared->app_key, [
+                "id" => $code
+            ]);
+            $a = $this->createV4Item($data);
+
+            if (!is_array($a['config'])) {
+                $a['config'] = Ini::toArray((string)$a['config']);
+            }
+
+            return $a;
+        } elseif ($shared->type == 2) {
+            $a = $this->post($shared->domain . "/shared/commodity/item", $shared->app_id, $shared->app_key, [
+                "sharedCode" => $code
+            ]);
+            if (!isset($a[0]['children'][0])) {
+                throw new JSONException("商品不存在#{$code}");
+            }
+
+            $b = $a[0]['children'][0];
+
+            if (!is_array($b['config'])) {
+                $b['config'] = Ini::toArray((string)$b['config']);
+            }
+
+            $b['stock'] = '10000000';
+
+            return $b;
+        }
         return $this->post($shared->domain . "/shared/commodity/item", $shared->app_id, $shared->app_key, [
             "code" => $code
         ]);
@@ -408,6 +455,12 @@ class Shared implements \App\Service\Shared
      */
     public function getItemStock(\App\Model\Shared $shared, string $code, ?string $race = null, ?array $sku = []): string
     {
+        if ($shared->type == 1) {
+            return "10000000";
+        } elseif ($shared->type == 2) {
+            return "10000000";
+        }
+        
         $stock = $this->post($shared->domain . "/shared/commodity/stock", $shared->app_id, $shared->app_key, [
             "code" => $code,
             "race" => $race,

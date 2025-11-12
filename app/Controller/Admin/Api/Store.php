@@ -228,7 +228,7 @@ class Store extends Manage
                 $commodity->purchase_count = $item['purchase_count'];
                 $commodity->widget = $item['widget'];
                 $commodity->minimum = $item['minimum'];
-                $commodity->stock = $item['stock'];
+                !empty($item['stock']) && $commodity->stock = $item['stock'];
 
                 //自动加价
                 $config = $this->shared->AdjustmentPrice((string)$item['config'], $item['price'], $item['user_price'], $premiumType, $premium);

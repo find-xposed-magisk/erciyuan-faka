@@ -147,7 +147,7 @@ class Shop implements \App\Service\Shop
                 "status", "owner", "delivery_way", "contact_type", "password_status", "level_price",
                 "level_disable", "coupon", "shared_id", "shared_code", "shared_premium", "shared_premium_type", "seckill_status",
                 "seckill_start_time", "seckill_end_time", "draft_status", "draft_premium", "inventory_hidden",
-                "widget", "minimum", "maximum", "shared_sync", "config", "stock"])
+                "widget", "minimum", "maximum", "shared_sync", "config", "stock", "code"])
             ->withCount(['order as order_sold' => function (Builder $relation) {
                 $relation->where("delivery_status", 1);
             }]);
@@ -191,7 +191,7 @@ class Shop implements \App\Service\Shop
                 $commodity->seckill_status = $new->seckill_status = $remoteItem['seckill_status'];
                 $commodity->seckill_start_time = $new->seckill_start_time = $remoteItem['seckill_start_time'];
                 $commodity->seckill_end_time = $new->seckill_end_time = $remoteItem['seckill_end_time'];
-                $commodity->widget = $new->widget = json_encode($remoteItem['widget']);
+                $commodity->widget = $new->widget = is_array($remoteItem['widget']) ? json_encode($remoteItem['widget']) : $remoteItem['widget'];
                 $commodity->minimum = $new->minimum = $remoteItem['minimum'];
                 $commodity->maximum = $new->maximum = $remoteItem['maximum'];
                 $commodity->stock = $new->stock = $remoteItem['stock'];

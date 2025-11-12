@@ -70,7 +70,7 @@
                     title: '配置',
                     show: item => item.hasOwnProperty('submit') && item.submit.length > 0,
                     click: (event, value, row, index) => {
-                        modal(util.icon("fa-duotone fa-regular fa-gear") + row.NAME, row);
+                        modal(util.icon("fa-duotone fa-regular fa-gear") + " " + row?.info?.name, row);
                     }
                 },
                 {

@@ -6,7 +6,6 @@ namespace App\Controller\Shared;
 
 use App\Controller\Base\API\Shared;
 use App\Entity\Query\Get;
-use App\Entity\QueryTemplateEntity;
 use App\Interceptor\SharedValidation;
 use App\Interceptor\Waf;
 use App\Model\Card;

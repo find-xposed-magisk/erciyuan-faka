@@ -122,8 +122,9 @@ const _Dict = new class _Dict extends _DictUtil {
                 {id: 1, "name": format.badge("手动/插件发货", "a-badge-primary")},
             ],
             "_shared_type": [
-                {id: 0, "name": format.badge("异次元(V3.0)", "a-badge-success")},
-                {id: 1, "name": format.badge("萌次元(V4.0)", "a-badge-primary")},
+                {id: 0, "name": format.badge("异次元(V3.1.2 重构后全新版)", "a-badge-success")},
+                {id: 2, "name": format.badge("异次元(V3.1.1 之前旧版)", "a-badge-primary")},
+                {id: 1, "name": format.badge("萌次元(V4.0)", "a-badge-primary")}
             ],
             "_manage_type": [
                 {id: 1, name: "<b style='color: #d0b728;'>超级管理员</b>"},
