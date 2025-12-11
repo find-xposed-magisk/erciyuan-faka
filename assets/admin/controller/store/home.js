@@ -191,9 +191,10 @@
                                             <div class="pay-list online-pay">
                                                 <div data-id="${plugin.id}"  data-type="0" data-pay="0" class="pay-item online-pay-click"><img class="item-icon" src="/assets/common/images/alipay.png"><span>支付宝</span></div>
                                                 <div data-id="${plugin.id}"  data-type="0" data-pay="1" class="pay-item online-pay-click"><img class="item-icon" src="/assets/common/images/wx.png"><span>微信支付</span></div>
+                                                <div data-id="${plugin.id}"  data-type="0" data-pay="2" class="pay-item online-pay-click"><img class="item-icon" src="/assets/common/images/usdt.png"><span>USDT(TRC20)</span></div>
                                             </div>
    
-                        </div>
+                        </div> 
                     </div>
               </div>`);
 
@@ -201,7 +202,7 @@
                                 $(`.open-group-enterprise`).parent().trigger('mousedown').trigger('click');
                             });
 
-                            const $onlinePay = dom.find(".online-pay-click");
+                            const $onlinePay = dom.find(".online-pay-click"); 
                             $onlinePay.click(function () {
                                 const type = $(this).data("type");
                                 const pay = $(this).data("pay");
@@ -257,6 +258,7 @@
                                             <div class="pay-list online-pay">
                                                 <div data-id="0" data-type="2" data-pay="0" class="pay-item online-pay-click"><img class="item-icon" src="/assets/common/images/alipay.png"><span>支付宝</span></div>
                                                 <div data-id="0" data-type="2" data-pay="1" class="pay-item online-pay-click"><img class="item-icon" src="/assets/common/images/wx.png"><span>微信支付</span></div>
+                                                <div data-id="0" data-type="2" data-pay="2" class="pay-item online-pay-click"><img class="item-icon" src="/assets/common/images/usdt.png"><span>USDT(TRC20)</span></div>
                                             </div>
    
                         </div>
