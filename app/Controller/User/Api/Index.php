@@ -374,10 +374,15 @@ class Index extends User
     /**
      * @param string $keywords
      * @return array
+     * @throws JSONException
      */
     public function query(string $keywords): array
     {
         $keywords = trim($keywords);
+
+        if ($keywords == "-") {
+            throw new JSONException("无数据");
+        }
 
         $get = new Get(Order::class);
         $get->setPaginate((int)$this->request->post("page"), (int)$this->request->post("limit"));

@@ -614,7 +614,7 @@ class Order implements \App\Service\Order
         $result = Db::transaction(function () use ($commodity, $rebate, $divideAmount, $business, $sku, $requestNo, $user, $userGroup, $num, $contact, $device, $amount, $owner, $pay, $cardId, $password, $coupon, $from, $widget, $race, $callbackDomain, $clientDomain) {
             //生成联系方式
             if ($user) {
-                $contact = "-";
+                $contact = Str::generateRandStr(16);
             }
 
             if ($requestNo && \App\Model\Order::query()->where("request_no", $requestNo)->first()) {
