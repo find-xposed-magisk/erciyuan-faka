@@ -1,22 +1,26 @@
 <p align="center">
   <a href="https://faka.wiki/">
-    <img src="https://acged.cc/svg/logo.png" width="120" height="120" style="border-radius: 20px;" alt="异次元店铺系统">
+    <img src="https://raw.githubusercontent.com/lizhipay/acg-faka/refs/heads/main/favicon.ico" width="120" height="120" style="border-radius: 20px;" alt="异次元店铺系统">
   </a>
 </p>
 
 <br>
 <p align="center">
 <span>
-<img src="https://acged.cc/svg/php.svg" alt="php8.0,8.1">
+<img src="https://faka.wiki/svg/php.svg" alt="php8.0,8.1">
 </span>
 <span>
-<img src="https://acged.cc/svg/mysql-version.svg" alt="mysql5.6+">
+<img src="https://faka.wiki/svg/mysql-version.svg" alt="mysql5.6+">
 </span>
-<span><img src="https://acged.cc/svg/license.svg" alt="license"></span>
+<span><img src="https://faka.wiki/svg/license.svg" alt="license"></span>
 </p>
 
-## 郑重声明
-> 本系统开源仅仅是为了新手学习开发商城为目的，所以请不要在没有相关运营资质情况下搭建外网进行运营，万不可触犯法律底线。
+## 法律声明
+> 本商城程序基于 MIT 协议开源，并且完全免费。该程序的初衷是为开发者提供学习和研究的机会。未取得合法资质，严禁将本程序用于任何商业用途，尤其是禁止利用本程序搭建平台进行商品销售。
+>
+> 用户在使用或学习本程序时，必须严格遵守法律法规。我们提倡依法行事，尊重法律，坚守法律，避免对社会产生不良影响。
+>
+> 使用本程序即表示您已充分理解并同意本法律声明的所有内容。
 
 ## 快速体验
 - 后台演示：[http://162.14.111.118:91/admin](http://162.14.111.118:91/admin)  账号：demo@demo.com 密码：123456
@@ -73,5 +77,5 @@ location / {
 - 安装完成后，后台地址是：`https://你的域名/admin`
 
 ## 更多支持
-- 交流QQ群：823266410
-- [Telegram](https://t.me/acgshop)
+- 交流QQ群：970103572
+- [Telegram](http://t.me/mcyofficial)
