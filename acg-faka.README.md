@@ -1,22 +1,31 @@
 <p align="center">
   <a href="https://faka.wiki/">
-    <img src="https://acged.cc/svg/logo.png" width="120" height="120" style="border-radius: 20px;" alt="异次元店铺系统">
+    <img src="https://raw.githubusercontent.com/lizhipay/acg-faka/refs/heads/main/favicon.ico" width="120" height="120" style="border-radius: 20px;" alt="异次元店铺系统">
   </a>
 </p>
 
 <br>
 <p align="center">
 <span>
-<img src="https://acged.cc/svg/php.svg" alt="php8.0,8.1">
+<img src="https://faka.wiki/svg/php.svg" alt="php8.0,8.1">
 </span>
 <span>
-<img src="https://acged.cc/svg/mysql-version.svg" alt="mysql5.6+">
+<img src="https://faka.wiki/svg/mysql-version.svg" alt="mysql5.6+">
 </span>
-<span><img src="https://acged.cc/svg/license.svg" alt="license"></span>
+<span><img src="https://faka.wiki/svg/license.svg" alt="license"></span>
 </p>
 
-## 郑重声明
-> 本系统开源仅仅是为了新手学习开发商城为目的，所以请不要在没有相关运营资质情况下搭建外网进行运营，万不可触犯法律底线。
+## 法律声明
+> 本商城程序基于 MIT 协议开源，并且完全免费。该程序的初衷是为开发者提供学习和研究的机会。未取得合法资质，严禁将本程序用于任何商业用途，尤其是禁止利用本程序搭建平台进行商品销售。
+>
+> 用户在使用或学习本程序时，必须严格遵守法律法规。我们提倡依法行事，尊重法律，坚守法律，避免对社会产生不良影响。
+>
+> 使用本程序即表示您已充分理解并同意本法律声明的所有内容。
+
+## 广告
+
+🚀 ARM AI — GPT / Claude / Gemini / Grok Token 服务平台，超低倍率、余额长期有效并支持无理由退款。立即体验：https://ai.arm.moe/
+
 
 ## 快速体验
 - 后台演示：[http://162.14.111.118:91/admin](http://162.14.111.118:91/admin)  账号：demo@demo.com 密码：123456
@@ -34,7 +43,7 @@
 - 共享店铺系统，可以在后台直接对接别人的店铺，通过扣除余额来进行无感知进货。
 - 应用商店，拥有众多插件以及模板，让你的店铺变得格外强大。
 - 界面美观，完美支持PC和手机，真正的内外二次元文化。
-- 强悍的扩展能力，你可以通过本程序在几分钟之内快速的实现你任意想实现的在线购物功能，例子如下： 
+- 强悍的扩展能力，你可以通过本程序在几分钟之内快速的实现你任意想实现的在线购物功能，例子如下：
   - 游戏方面，物品购买即时到玩家背包
   - 商业软件余额充值
   - 商业软件自动授权
@@ -45,14 +54,16 @@
 ## 安装教程
 
 - 在安装之前，请检查你的系统环境，`php>=8.0`，`MySQL版本>=5.6[不推荐5.6后续升级可能会有问题，推荐5.7或者8.0]`，因为使用了大量的PHP8注解以及PHP8的新特性，所以php版本不得不从8.0起，这里还需要注意。
-- 将源码下载至你的服务器、或者使用composer下载源码：`composer create-project lizhipay/acg-faka:dev-main`
+- 将源码下载至你的服务器、或者使用composer下载源码：`composer create-project lizhipay/acg-faka`
 - 以上步骤完成后，然后配置伪静态，Apache无需配置，根目录已经有.htaccess文件了，但如果你是Nginx，则需要配置伪静态。
 - 下面是Nginx伪静态规则：
 ```
+location ~* ^/(runtime|kernel|config|vendor)/                { return 404; }
+location ~  /\.(?!well-known)                                { return 404; }
+location ~* \.(log|sql|sqlite|db|db-wal|db-shm|bak|old|save|orig|swp|swo|tmp|ini|lock)$  { return 404; }
+location ~* (~|composer\.(json|lock)|package(-lock)?\.json)$ { return 404; }
 location / {
-      if (!-e $request_filename){
-              rewrite ^(.*)$ /index.php?s=$1 last; break;
-      }
+    try_files $uri $uri/ /index.php?s=$uri&$args;
 }
 ```
 - Windows IIS服务器环境，可以使用下面伪静态规则：
@@ -73,5 +84,5 @@ location / {
 - 安装完成后，后台地址是：`https://你的域名/admin`
 
 ## 更多支持
-- 交流QQ群：823266410
-- [Telegram](https://t.me/acgshop)
+- 交流QQ群：970103572
+- [Telegram](http://t.me/mcyofficial)
