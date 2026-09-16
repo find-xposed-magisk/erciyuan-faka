@@ -15983,5 +15983,217 @@
   "，获取更多折扣！": {
     "scene": "tpl",
     "count": 2
+  },
+  "本月": {
+    "scene": "tpl",
+    "count": 5
+  },
+  "推广佣金": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "成交订单": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "新开分站": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "利润": {
+    "scene": "tpl",
+    "count": 12
+  },
+  "今日利润": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "昨日利润": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "本月利润": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "趋势": {
+    "scene": "tpl",
+    "count": 4
+  },
+  "时间范围": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "7 天": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "30 天": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "指标": {
+    "scene": "tpl",
+    "count": 2
+  },
+  "成交额": {
+    "scene": "tpl",
+    "count": 4
+  },
+  "统计周期": {
+    "scene": "tpl",
+    "count": 2
+  },
+  "利润构成": {
+    "scene": "tpl",
+    "count": 2
+  },
+  "支付手续费": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "商户分成": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "分站分成": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "客单价": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "新增会员": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "兑现到余额": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "待处理": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "持平": {
+    "scene": "js",
+    "count": 1
+  },
+  "成交额 {amount} · {count} 单": {
+    "scene": "js",
+    "count": 2
+  },
+  "上月 {amount}": {
+    "scene": "js",
+    "count": 1
+  },
+  "待审核提现": {
+    "scene": "js",
+    "count": 1
+  },
+  "需站长审核": {
+    "scene": "js",
+    "count": 1
+  },
+  "待发货订单": {
+    "scene": "js",
+    "count": 1
+  },
+  "待回复工单": {
+    "scene": "js",
+    "count": 1
+  },
+  "数据加载失败，请重试": {
+    "scene": "js",
+    "count": 3
+  },
+  "网络异常，数据加载失败": {
+    "scene": "js",
+    "count": 1
+  },
+  "亏损": {
+    "scene": "js",
+    "count": 4
+  },
+  "含商户商品抽成 {amount}": {
+    "scene": "js",
+    "count": 1
+  },
+  "较昨日同时段": {
+    "scene": "js",
+    "count": 1
+  },
+  "较前日": {
+    "scene": "js",
+    "count": 1
+  },
+  "较上月同期": {
+    "scene": "js",
+    "count": 1
+  },
+  "上升": {
+    "scene": "js",
+    "count": 1
+  },
+  "下降": {
+    "scene": "js",
+    "count": 2
+  },
+  "支付通道": {
+    "scene": "tpl",
+    "count": 2
+  },
+  "暂无收款": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "已删除的通道": {
+    "scene": "js",
+    "count": 1
+  },
+  "{count} 笔": {
+    "scene": "js",
+    "count": 1
+  },
+  "全部时间": {
+    "scene": "js",
+    "count": 1
+  },
+  "未付款 {count} 单": {
+    "scene": "js",
+    "count": 1
+  },
+  "利润率 {rate}": {
+    "scene": "js",
+    "count": 1
+  },
+  "付款人数 {count}": {
+    "scene": "js",
+    "count": 1
+  },
+  "人均消费 {amount}": {
+    "scene": "js",
+    "count": 1
+  },
+  "订单 {order} · 充值 {recharge}": {
+    "scene": "js",
+    "count": 1
+  },
+  "网关 {amount}": {
+    "scene": "js",
+    "count": 2
+  },
+  "在线支付 {online} · 余额 {balance}": {
+    "scene": "js",
+    "count": 1
+  },
+  "会员与提现": {
+    "scene": "tpl",
+    "count": 1
+  },
+  "其余 {count} 个通道": {
+    "scene": "js",
+    "count": 1
   }
 }

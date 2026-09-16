@@ -812,172 +812,40 @@
         display: none;
     }
 
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] #kt_content_container > .row {
-        margin: 0;
+    /* 控制台：版式与桌面同一套（material.css 的 dash-*，按容器宽度自动收成单列），这里只换成手机后台的卡片语言 */
+    html[data-admin-layout="mobile"][data-theme] .dash {
+        --dash-gap: 12px;
+        --dash-pad: 18px;
+        --dash-line: var(--admin-mobile-line);
+        padding-bottom: 4px;
     }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] #kt_content_container > .row > :is(.dashboard-announcements, .dashboard-main) {
-        display: contents;
+    html[data-admin-layout="mobile"][data-theme] .dash-card {
+        border: 0;
+        border-radius: var(--admin-mobile-radius);
+        background: var(--admin-mobile-surface);
+        box-shadow: var(--admin-mobile-card-shadow);
     }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-main > * {
-        width: 100%;
-        max-width: 100%;
-        flex: 0 0 100%;
-        order: 3;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-main > .dash-profile { order: 1; }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements > .dashboard-announcements__card {
-        position: relative;
-        isolation: isolate;
-        width: 100%;
-        max-width: 100%;
-        height: auto !important;
-        flex: 0 0 100%;
-        order: 2;
-        margin: 0 0 24px;
-        border: 1px solid color-mix(in srgb, var(--admin-mobile-primary) 34%, var(--admin-mobile-line));
-        border-radius: 22px;
-        background:
-            radial-gradient(circle at 92% 0, color-mix(in srgb, var(--admin-mobile-primary) 18%, transparent), transparent 42%),
-            linear-gradient(145deg, color-mix(in srgb, var(--admin-mobile-primary) 9%, var(--admin-mobile-surface)), var(--admin-mobile-surface) 62%);
-        box-shadow: 0 18px 38px -26px color-mix(in srgb, var(--admin-mobile-primary) 82%, transparent), var(--admin-mobile-card-shadow);
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card > .card-header {
-        display: grid;
-        min-height: 66px;
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: center;
-        gap: 8px;
-        padding: 11px 12px 11px 14px !important;
-        border-bottom: 1px solid color-mix(in srgb, var(--admin-mobile-primary) 16%, var(--admin-mobile-line)) !important;
-        background: color-mix(in srgb, var(--admin-mobile-primary) 7%, transparent);
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__toggle {
-        display: inline-grid !important;
-        width: 44px;
-        min-width: 44px;
-        height: 44px;
+    html[data-admin-layout="mobile"][data-theme] .dash-todo__row,
+    html[data-admin-layout="mobile"][data-theme] .dash-news__item {
         min-height: 44px;
+    }
+    html[data-admin-layout="mobile"][data-theme] .dash-news__toggle {
+        display: inline-grid;
+        width: 40px;
+        height: 40px;
+        margin: -8px -10px -8px 0;
+        padding: 0;
         place-items: center;
         border: 0;
         border-radius: 50%;
-        padding: 0;
-        background: color-mix(in srgb, var(--admin-mobile-primary) 13%, var(--admin-mobile-surface));
-        color: var(--admin-mobile-primary-ink);
-        box-shadow: none;
+        background: transparent;
+        color: var(--admin-mobile-muted);
         touch-action: manipulation;
     }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__toggle:active {
-        background: color-mix(in srgb, var(--admin-mobile-primary) 21%, var(--admin-mobile-surface));
-        transform: scale(.94);
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__toggle > .material-icons-outlined {
-        font-size: 24px;
-        line-height: 1;
-        transition: transform .18s ease;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card.is-collapsed > .card-header {
-        border-bottom-color: transparent !important;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card.is-collapsed > .ad-html {
-        display: none !important;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card.is-collapsed .dashboard-announcements__subtitle {
-        display: none !important;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card.is-collapsed .dashboard-announcements__toggle > .material-icons-outlined {
-        transform: translateY(-1px);
-    }
-    @media (prefers-reduced-motion: reduce) {
-        html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__toggle,
-        html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__toggle > .material-icons-outlined {
-            transition: none;
-        }
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card .card-title {
-        display: grid;
-        min-width: 0;
-        align-items: center;
-        gap: 3px;
-        margin: 0;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card .card-title h3 {
-        margin: 0;
-        color: var(--admin-mobile-text);
-        font-size: 17px;
-        font-weight: 750;
-        letter-spacing: -.02em;
-        line-height: 1.25;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card .card-title h3 > i {
-        display: grid;
-        width: 32px;
-        height: 32px;
-        flex: 0 0 32px;
-        place-items: center;
-        border-radius: 12px;
-        background: var(--admin-mobile-primary);
-        color: var(--admin-mobile-on-primary) !important;
-        box-shadow: 0 10px 20px -14px color-mix(in srgb, var(--admin-mobile-primary) 92%, transparent);
-        font-size: 15px;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__subtitle {
-        display: block !important;
-        padding-left: 40px;
-        color: var(--admin-mobile-muted);
-        font-size: 10.5px;
-        font-weight: 560;
-        line-height: 1.35;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card > .ad-html {
-        gap: 8px;
-        padding: 11px 12px 13px !important;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card .md-ad-item {
-        min-height: 54px;
-        border-color: color-mix(in srgb, var(--admin-mobile-primary) 16%, var(--admin-mobile-line));
-        border-radius: 16px;
-        padding: 10px 12px 10px 16px;
-        background-color: var(--admin-mobile-surface);
-        box-shadow: 0 8px 22px -20px color-mix(in srgb, var(--admin-mobile-primary) 74%, transparent);
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card .md-ad-item:first-child {
-        border-color: color-mix(in srgb, var(--admin-mobile-primary) 30%, var(--admin-mobile-line));
-        background-image: linear-gradient(135deg, color-mix(in srgb, var(--admin-mobile-primary) 9%, transparent), transparent 58%);
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card .md-ad-item__title {
-        min-height: 44px;
-        font-size: 12.5px;
-        font-weight: 650;
-        line-height: 1.48;
-    }
-    html[data-admin-layout="mobile"][data-theme][data-admin-mobile-recipe="admin-dashboard"] .dashboard-announcements__card .md-ad-item__time {
-        margin-top: 4px;
-        font-size: 10.5px;
-    }
-    html[data-admin-layout="mobile"][data-theme] #statistics { width: 100% !important; height: 268px !important; min-height: 268px; }
-
-    html[data-admin-layout="mobile"][data-theme] .dash-profile {
-        margin-bottom: 24px !important;
-        border-radius: 22px;
-        box-shadow: var(--admin-mobile-card-shadow);
-    }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile::before { display: none; }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile__body { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 18px; }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile__identity { align-items: center; gap: 13px; }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile__avatar { width: 54px; height: 54px; border-radius: 50%; }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile__eyebrow { color: var(--admin-mobile-primary-ink); }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile__security { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile__meta { min-width: 0; border: 0; border-radius: 15px; padding: 11px; background: var(--admin-mobile-surface-2); box-shadow: none; }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile__meta-icon { display: none; }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile__meta-value {
-        max-width: 100%;
-        overflow: visible;
-        overflow-wrap: anywhere;
-        white-space: normal;
-        word-break: break-word;
-    }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile__meta-value::-webkit-scrollbar { display: none; }
-    html[data-admin-layout="mobile"][data-theme] .dash-profile__meta-note { white-space: normal; overflow-wrap: anywhere; }
+    html[data-admin-layout="mobile"][data-theme] .dash-news__toggle:active { background: var(--dash-fill); }
+    html[data-admin-layout="mobile"][data-theme] .dash-news__toggle > .material-icons-outlined { font-size: 22px; }
+    html[data-admin-layout="mobile"][data-theme] .dash-news.is-collapsed .dash-card__head { margin-bottom: -4px; }
+    html[data-admin-layout="mobile"][data-theme] .dash-news.is-collapsed .dash-news__list { display: none; }
 
     html[data-admin-layout="mobile"][data-theme] .admin-mobile-shell { display: contents; }
 

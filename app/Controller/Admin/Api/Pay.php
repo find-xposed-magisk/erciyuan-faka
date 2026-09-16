@@ -8,6 +8,7 @@ use App\Controller\Base\API\Manage;
 use App\Entity\PayEntity;
 use App\Entity\Query\Get;
 use App\Interceptor\ManageSession;
+use App\Interceptor\Owner;
 use App\Model\Config as ConfigModel;
 use App\Model\ManageLog;
 use App\Model\Order;
@@ -27,7 +28,8 @@ use Kernel\Context\Interface\Request;
 use Kernel\Exception\JSONException;
 use Kernel\Waf\Filter;
 
-#[Interceptor([ManageSession::class], Interceptor::TYPE_API)]
+//支付通道=网关凭据/回调配置(含插件真实密钥)，收敛到站长(type==0)本人（F-12）
+#[Interceptor([ManageSession::class, Owner::class], Interceptor::TYPE_API)]
 class Pay extends Manage
 {
 

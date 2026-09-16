@@ -393,6 +393,19 @@ class Authentication extends User
             throw new JSONException($risk->message("操作过于频繁，请稍后再试"));
         }
 
+        //找回密码是账号接管的高价值面：验证码校验侧原本无任何尝试限制，6 位码可在 300s 窗口内无限爆破。
+        //风控插件（可被停用）不可依赖，这里加硬性双维度限流：IP 维度挡单点喷洒；目标维度**不含 IP**，
+        //杜绝分布式 IP 绕过。触限即销毁该目标的找回验证码，使已发出的码立即失效，攻击者必须重新发码
+        //（发码侧有 60s 冷却 + 图形验证码）。（F-32）
+        $ip = Client::getAddress();
+        $forgetTargetKey = "forget:target:" . md5(strtolower(trim($riskAccount)));
+        if (Throttle::tooMany("forget:ip:{$ip}", 30, 300) || Throttle::tooMany($forgetTargetKey, 10, 600)) {
+            $forgetType == 0
+                ? $this->email->destroyCaptcha($riskAccount, Email::CAPTCHA_FORGET)
+                : $this->sms->destroyCaptcha($riskAccount, Sms::CAPTCHA_FORGET);
+            throw new JSONException("尝试过于频繁，请稍后再试");
+        }
+
         if (!isset($_POST['password']) || !Validation::password((string)$_POST['password'])) {
             throw new JSONException("密码最少6位");
         }
@@ -418,8 +431,17 @@ class Authentication extends User
             $this->sms->destroyCaptcha($_POST['username'], Sms::CAPTCHA_FORGET);
         }
 
+        //账号在「发码后、提交前」被删会让 $user 为 null（低危 500 面），给出通用错误而非崩溃。
+        if (!$user) {
+            throw new JSONException("账号异常，请重新发起找回");
+        }
+
         $user->password = Str::generatePassword($_POST['password'], $user->salt);
         $user->save();
+
+        //成功即清零两个维度的失败计数，避免误伤本人后续操作。
+        Throttle::clear("forget:ip:{$ip}");
+        Throttle::clear($forgetTargetKey);
 
         return $this->json(200, "密码重置成功");
     }

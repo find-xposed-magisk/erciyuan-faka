@@ -900,7 +900,7 @@ function acgSecretPopup(res) {
             '.acg-secret__note-title{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.7;margin-bottom:6px;}' +
             '.acg-secret__note-title svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;' +
             'stroke-linecap:round;stroke-linejoin:round;}' +
-            '.acg-secret__note-body{font-size:13px;line-height:1.75;word-break:break-word;max-height:180px;overflow:auto;}' +
+            '.acg-secret__note-body{font-size:13px;line-height:1.75;white-space:pre-line;word-break:break-word;max-height:180px;overflow:auto;}' +
             '.acg-secret__note-body p:last-child{margin-bottom:0;}';
         document.head.appendChild(st);
     }

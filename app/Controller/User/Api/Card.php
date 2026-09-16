@@ -214,12 +214,19 @@ class Card extends User
             throw new JSONException("卡密不存在");
         }
 
-        if (!\App\Model\Card::query()->where("id", $map['id'])->where("owner", $this->getUser()->id)->exists()) {
+        $card = \App\Model\Card::query()->where("id", $map['id'])->where("owner", $this->getUser()->id)->first();
+        if (!$card) {
             throw new JSONException("卡密不存在");
         }
 
+        //已售卡密(status=1)不得改动交付内容/状态：改 secret=交付后篡改，翻回 status=0=同卡二次交付（F-35）。
+        //与兄弟方法 lock/unlock/sell 的 status!=1 守卫对齐；已售卡最多只允许改内部备注 note。
+        $whitelist = (int)$card->status === 1
+            ? ["note"]
+            : ["draft", "secret", "note", "draft_premium", "status"];
+
         $save = new Save(\App\Model\Card::class);
-        $save->setMap($map, ["draft", "secret", "note", "draft_premium", "status"]);
+        $save->setMap($map, $whitelist);
         $save = $this->query->save($save);
         if (!$save) {
             throw new JSONException("保存失败");

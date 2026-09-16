@@ -9,6 +9,7 @@ use App\Entity\Query\Delete;
 use App\Entity\Query\Get;
 use App\Entity\Query\Save;
 use App\Interceptor\ManageSession;
+use App\Interceptor\Owner;
 use App\Model\Bill;
 use App\Model\Business;
 use App\Model\ManageLog;
@@ -78,6 +79,8 @@ class User extends Manage
      * @return array
      * @throws JSONException
      */
+    //改会员密码/邮箱/手机/状态/上级/商户等级=账号接管面，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function save(): array
     {
         if (strtoupper($this->request->method()) !== 'POST') {
@@ -244,6 +247,8 @@ class User extends Manage
     /**
      * @throws JSONException
      */
+    //直接改会员余额=铸币，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function recharge(): array
     {
         $user = $this->changeAccountBalance(0);
@@ -254,6 +259,8 @@ class User extends Manage
     /**
      * @throws JSONException
      */
+    //直接改会员硬币=铸币，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function coin(): array
     {
         $user = $this->changeAccountBalance(1);
@@ -472,6 +479,8 @@ class User extends Manage
     /**
      * @throws JSONException
      */
+    //改会员折扣等级=影响全站购买折扣，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function fastUpdateUserGroup(): array
     {
         if (strtoupper($this->request->method()) !== 'POST') {

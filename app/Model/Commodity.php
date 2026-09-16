@@ -206,9 +206,39 @@ class Commodity extends Model
                 throw new JSONException("会员等级[{$groupId}]的配置格式错误");
             }
             try {
-                Ini::toArray((string)($var['config'] ?? ""));
+                $parsed = Ini::toArray((string)($var['config'] ?? ""));
             } catch (JSONException $e) {
                 throw new JSONException("会员等级[{$groupId}]的独立配置解析失败：" . $e->getMessage());
+            }
+            //level_price 的内层 config 会经 parseGroupConfig() 合并成有效配置参与估价，是与顶层 config
+            //同源的负价通道。此前只查语法不查价格：商户在这里填负价→买家估价变负→amount<=0 免支付直发。
+            //与顶层 config 同口径校验各价格档非负。
+            self::assertConfigPricesNonNegative($parsed);
+        }
+    }
+
+    /**
+     * 校验（已解析的）商品配置里各价格档为「不小于 0 的数字」。
+     *
+     * category/wholesale/category_wholesale 的值是成交单价、sku 的值是溢价，任一为负或非数字都可能算出
+     * 负数金额→trade() 命中 amount<=0 免支付直发（平台货源商品还会让平台向上游代付=亏损）。空值放行
+     * （下游按 0 处理）。顶层 config 与 level_price 内层 config 两条路径共用本校验，避免任一处遗漏。
+     *
+     * @param array $config Ini::toArray() 解析后的配置
+     * @throws JSONException
+     */
+    public static function assertConfigPricesNonNegative(array $config): void
+    {
+        foreach (['category', 'wholesale', 'category_wholesale', 'sku'] as $section) {
+            if (!empty($config[$section]) && is_array($config[$section])) {
+                array_walk_recursive($config[$section], static function ($value): void {
+                    if ($value === '' || $value === null) {
+                        return;
+                    }
+                    if (!is_numeric($value) || (float)$value < 0) {
+                        throw new JSONException("商品价格配置必须是不小于0的数字哦(｡￫‿￩｡)");
+                    }
+                });
             }
         }
     }

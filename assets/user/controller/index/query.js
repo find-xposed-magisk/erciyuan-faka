@@ -114,7 +114,7 @@
         </div>
       </div>`;
             } else {
-                cardContent = `<div class="card-content-no-password"><div class="card-display">${esc(order.secret)}</div></div>${order?.commodity?.leave_message ? `<div class="mt-3">${esc(order?.commodity?.leave_message)}</div>` : ""}`;
+                cardContent = `<div class="card-content-no-password"><div class="card-display">${esc(order.secret)}</div></div>${order?.commodity?.leave_message ? `<div class="mt-3" style="white-space:pre-line">${esc(order?.commodity?.leave_message)}</div>` : ""}`;
             }
 
             cardContent = `<div class="card-section">

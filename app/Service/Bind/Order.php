@@ -1036,61 +1036,77 @@ class Order implements \App\Service\Order
 
     private function pullCardForLocal(\App\Model\Order $order, Commodity $commodity): string
     {
-        $secret = "很抱歉，有人在你付款之前抢走了商品，请联系客服。";
+        $soldOut = "很抱歉，有人在你付款之前抢走了商品，请联系客服。";
 
+        //预选卡：下单时 lockLocalDraftCardForOrder 只校验了「未售」但并未落定，付款到发货之间可能被另一笔
+        //同样预选它的订单抢先发出。这里加行锁复查 status 后再落定交付，杜绝同一张卡密发给两个买家。
         $draft = $order->card;
-
         if ($draft) {
-            if ($draft->status == 0) {
-                $secret = $draft->secret;
-                $draft->purchase_time = $order->pay_time;
-                $draft->order_id = $order->id;
-                $draft->status = 1;
-                $draft->save();
-            }
-            return $secret;
-        }
-
-        $direction = match ($commodity->delivery_auto_mode) {
-            0 => "id asc",
-            1 => "rand()",
-            2 => "id desc"
-        };
-        $cards = Card::query()->where("commodity_id", $order->commodity_id)->orderByRaw($direction)->where("status", 0);
-
-        if ($order->race) {
-            $cards = $cards->where("race", $order->race);
-        } else {
-            $cards = $cards->where(function ($query) {
-                $query->whereNull("race")->orWhere("race", "");
+            return DB::transaction(function () use ($order, $draft, $soldOut): string {
+                $locked = Card::query()->whereKey($draft->id)->lockForUpdate()->first();
+                if (!$locked || (int)$locked->status !== 0) {
+                    return $soldOut;
+                }
+                $locked->purchase_time = $order->pay_time;
+                $locked->order_id = $order->id;
+                $locked->status = 1;
+                $locked->save();
+                return (string)$locked->secret;
             });
         }
 
-        if (!empty($order->sku)) {
-            foreach ($order->sku as $k => $v) {
-                $cards = $cards->where("sku->{$k}", $v);
+        $direction = match ($commodity->delivery_auto_mode) {
+            1 => "rand()",
+            2 => "id desc",
+            default => "id asc",
+        };
+
+        //自动拉卡：原实现「读候选」与「标记已售」之间无锁、且 UPDATE 不带 status=0 守卫，两笔并发能读到
+        //同一批 status=0 的卡各自发货（同卡两卖）。照抄预选路径的做法——事务内 lockForUpdate 锁住候选行、
+        //复核数量足够后再原子落定；不足则一张都不抢（避免锁到的卡被标售却没交付=泄漏库存，仍走「付了没货」
+        //由站长手动退款的既有取舍）。高并发下单路径本就在 serializable 事务内，这里的锁与之叠加不改变语义。
+        return DB::transaction(function () use ($order, $direction, $soldOut): string {
+            $cards = Card::query()
+                ->where("commodity_id", $order->commodity_id)
+                ->where("status", 0)
+                ->orderByRaw($direction);
+
+            if ($order->race) {
+                $cards = $cards->where("race", $order->race);
+            } else {
+                $cards = $cards->where(function ($query) {
+                    $query->whereNull("race")->orWhere("race", "");
+                });
             }
-        }
 
-        $cards = $cards->limit($order->card_num)->get();
+            if (!empty($order->sku)) {
+                foreach ($order->sku as $k => $v) {
+                    $cards = $cards->where("sku->{$k}", $v);
+                }
+            }
 
-        if (count($cards) == $order->card_num) {
+            $cards = $cards->lockForUpdate()->limit($order->card_num)->get();
+
+            if (count($cards) != $order->card_num) {
+                return $soldOut;
+            }
+
             $ids = [];
             $cardc = '';
             foreach ($cards as $card) {
                 $ids[] = $card->id;
                 $cardc .= $card->secret . PHP_EOL;
             }
-            try {
-                $rows = Card::query()->whereIn("id", $ids)->update(['purchase_time' => $order->pay_time, 'order_id' => $order->id, 'status' => 1]);
-                if ($rows != 0) {
-                    $secret = trim($cardc, PHP_EOL);
-                }
-            } catch (\Exception $e) {
-            }
-        }
 
-        return $secret;
+            //候选行已被本事务 lockForUpdate 锁住并复核为 status=0，落定必然成功、且不会与并发订单抢到同一张。
+            Card::query()->whereIn("id", $ids)->update([
+                'purchase_time' => $order->pay_time,
+                'order_id' => $order->id,
+                'status' => 1,
+            ]);
+
+            return trim($cardc, PHP_EOL);
+        });
     }
 
     public function callback(string $tradeNo, array $map): string

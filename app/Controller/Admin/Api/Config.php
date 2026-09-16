@@ -7,6 +7,7 @@ use App\Consts\Manage as ManageConst;
 use App\Controller\Base\API\Manage;
 use App\Entity\Query\Get;
 use App\Interceptor\ManageSession;
+use App\Interceptor\Owner;
 use App\Model\Business;
 use App\Model\Category;
 use App\Model\Config as CFG;
@@ -626,6 +627,8 @@ class Config extends Manage
         }
     }
 
+    //网站设置(含安全相关开关/公告/主题)，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function setting(Request $request): array
     {
         if (strtoupper($request->method()) !== 'POST') {
@@ -671,13 +674,9 @@ class Config extends Manage
             $settings[$key] = $this->settingBoolean($post, $key);
         }
 
-        $rawNotice = $request->unsafePost('notice');
-        if (is_string($rawNotice) && !str_contains($rawNotice, "\0")) {
-            if (mb_strlen($rawNotice) > 60000 || strlen($rawNotice) > 60000) {
-                throw new JSONException('网站设置内容超出允许长度');
-            }
-            $settings['notice'] = $rawNotice;
-        }
+        //公告是富文本，但走 settingString($post) 的 post() 净化管线（已在上面赋值给 $settings['notice']）。
+        //不再用 unsafePost 原文覆盖：config.notice ∈ RAW_PATHS，首页/site.info 原样渲染，任意管理员档位
+        //写入的可执行 HTML 会变成首页级存储型 XSS（F-27/F-51）。
 
         $this->installFavicon($logo);
         try {
@@ -691,6 +690,8 @@ class Config extends Manage
         return $this->json(200, '保存成功');
     }
 
+    //安全设置：关请求日志/轮换日志密钥/改后台安全入口/改IP获取模式——最敏感，收敛到站长(type==0)（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function security(Request $request): array
     {
         $post = $this->configPost(self::SECURITY_REQUEST_FIELDS, '安全设置');
@@ -780,6 +781,8 @@ class Config extends Manage
         return $this->json(200, '保存成功');
     }
 
+    //清请求日志=反取证，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function requestLogClear(): array
     {
         if (strtoupper($this->request->method()) !== 'POST') {
@@ -801,6 +804,8 @@ class Config extends Manage
         ));
     }
 
+    //CSP 违规记录清空，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function cspClear(): array
     {
         if (strtoupper($this->request->method()) !== 'POST') {
@@ -821,6 +826,8 @@ class Config extends Manage
      * @return array
      * @throws JSONException
      */
+    //CSP 脚本源加白=放行外部脚本来源，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function cspAllow(): array
     {
         if (strtoupper($this->request->method()) !== 'POST') {
@@ -876,6 +883,8 @@ class Config extends Manage
      * @return array
      * @throws JSONException
      */
+    //CSP 脚本源移除，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function cspAllowRemove(): array
     {
         if (strtoupper($this->request->method()) !== 'POST') {
@@ -1007,6 +1016,8 @@ class Config extends Manage
         return $this->json(200, "成功", $list);
     }
 
+    //短信通道配置(含短信平台真实凭据)，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function sms(): array
     {
         $map = $this->configPost(self::SMS_REQUEST_FIELDS, '短信设置');
@@ -1081,6 +1092,8 @@ class Config extends Manage
         return $this->json(200, '保存成功');
     }
 
+    //邮箱通道配置(含 SMTP 真实凭据)，收敛到站长(type==0)本人（F-12）
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function email(): array
     {
         $map = $this->configPost(self::EMAIL_REQUEST_FIELDS, '邮箱设置');

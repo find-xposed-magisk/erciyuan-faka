@@ -7,6 +7,7 @@ namespace App\Controller\Admin\Api;
 use App\Controller\Base\API\Manage;
 use App\Entity\Query\Get;
 use App\Interceptor\ManageSession;
+use App\Interceptor\Owner;
 use App\Model\ManageLog;
 use App\Model\PriceTemplate;
 use App\Model\Shared;
@@ -22,7 +23,8 @@ use Kernel\Context\Interface\Request;
 use Kernel\Exception\JSONException;
 use Kernel\Waf\Filter;
 
-#[Interceptor(ManageSession::class, Interceptor::TYPE_API)]
+//对接店铺=上游货源凭据(app_key)配置，改域名会外带真实密钥，收敛到站长(type==0)本人（F-12，联动 F-29）
+#[Interceptor([ManageSession::class, Owner::class], Interceptor::TYPE_API)]
 class Store extends Manage
 {
 

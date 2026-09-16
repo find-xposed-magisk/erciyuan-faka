@@ -130,10 +130,15 @@ class Security extends User
      */
     public function email(): array
     {
+        //改绑前必须用登录密码二次验证：只凭会话（可能经 XSS/共享设备被窃）就能改绑，会被攻击者改到
+        //自己的邮箱再走找回密码永久接管（F-33）。要求账号密码=只有会话也改不了绑定。
+        $user = $this->getUser();
+        if (!Str::verifyPassword((string)$user->password, (string)$user->salt, (string)($_POST['password'] ?? ''), (string)$this->request->unsafePost('password'))) {
+            throw new JSONException("登录密码不正确");
+        }
         if (!$this->email->checkCaptcha($_POST['email'], Email::CAPTCHA_BIND_NEW, (int)$_POST['email_captcha'])) {
             throw new JSONException("邮箱验证码不正确");
         }
-        $user = $this->getUser();
         $user->email = $_POST['email'];
         $user->save();
 
@@ -147,10 +152,14 @@ class Security extends User
      */
     public function phone(): array
     {
+        //改绑前必须用登录密码二次验证（同 email()，防会话被窃后改绑手机再走找回密码永久接管，F-33）。
+        $user = $this->getUser();
+        if (!Str::verifyPassword((string)$user->password, (string)$user->salt, (string)($_POST['password'] ?? ''), (string)$this->request->unsafePost('password'))) {
+            throw new JSONException("登录密码不正确");
+        }
         if (!$this->sms->checkCaptcha($_POST['phone'], Sms::CAPTCHA_BIND_NEW, (int)$_POST['phone_captcha'])) {
             throw new JSONException("手机验证码不正确");
         }
-        $user = $this->getUser();
         $user->phone = $_POST['phone'];
         $user->save();
 

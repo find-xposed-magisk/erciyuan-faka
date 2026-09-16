@@ -7,6 +7,7 @@ namespace App\Controller\Admin\Api;
 use App\Controller\Base\API\Manage;
 use App\Entity\Query\Get;
 use App\Interceptor\ManageSession;
+use App\Interceptor\Owner;
 use App\Model\ManageLog;
 use App\Service\Query;
 use App\Util\Date;
@@ -17,7 +18,8 @@ use Kernel\Annotation\Inject;
 use Kernel\Annotation\Interceptor;
 use Kernel\Exception\JSONException;
 
-#[Interceptor(ManageSession::class, Interceptor::TYPE_API)]
+//提现审批/结算是真实资金决策，收敛到站长(type==0)本人：ManageSession 先加载会话，Owner 再校验档位（F-12）
+#[Interceptor([ManageSession::class, Owner::class], Interceptor::TYPE_API)]
 class Cash extends Manage
 {
     #[Inject]

@@ -5,6 +5,7 @@ namespace App\Controller\Admin\Api;
 
 use App\Controller\Base\API\Manage;
 use App\Interceptor\ManageSession;
+use App\Interceptor\Owner;
 use App\Interceptor\Waf;
 use App\Model\ManageLog;
 use App\Util\Client;
@@ -21,7 +22,9 @@ use Kernel\Exception\JSONException;
  *
  * @package App\Controller\Admin\Api
  */
-#[Interceptor([Waf::class, ManageSession::class], Interceptor::TYPE_API)]
+//MCP access_key 是「免会话即可读取插件真实凭据 / 操作开发者商店」的高价值机密，明文经 info() 返回，
+//必须收敛到站长(type==0)本人：加 Owner 墙，堵住任意管理员档位读取/轮换/开关秘钥的暴露面（F-11）。
+#[Interceptor([Waf::class, ManageSession::class, Owner::class], Interceptor::TYPE_API)]
 class Mcp extends Manage
 {
     /**

@@ -6,6 +6,7 @@ namespace App\Controller\Admin\Api;
 use App\Controller\Base\API\Manage;
 use App\Entity\Query\Get;
 use App\Interceptor\ManageSession;
+use App\Interceptor\Owner;
 use App\Model\Commodity;
 use App\Model\ManageLog;
 use App\Model\PriceTemplate as TemplateModel;
@@ -24,7 +25,8 @@ use Kernel\Waf\Filter;
  * 加价模板：一键给一批商品套用统一的定价规则（issue #798）。
  * 对接商品尤其需要——上游价格变动后，逐个商品手填游客价/会员价/各等级价工作量极大。
  */
-#[Interceptor([ManageSession::class], Interceptor::TYPE_API)]
+//加价模板 apply 会批量改写全站商品价格(可清零)，save 可存负值模板，收敛到站长(type==0)本人（F-12/F-25）
+#[Interceptor([ManageSession::class, Owner::class], Interceptor::TYPE_API)]
 class PriceTemplate extends Manage
 {
     /** 单次最多处理的商品数，防止一次请求跑太久 */

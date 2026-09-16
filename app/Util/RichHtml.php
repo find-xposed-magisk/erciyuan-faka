@@ -29,6 +29,12 @@ final class RichHtml
             return '';
         }
 
+        //纵深防御：本 purifier 不挂 IgnoreStyleTagFilter，正常会剥掉 <style>；这里再兜底剥一次
+        //残留的 <style> 与任何形态的 [STYLE-TAG…] 文本占位符，确保不可信正文（如分站公告 config.notice
+        //∈ RAW_PATHS）不会把外连样式表/信标带出去，也不会被下游凭空还原成 <style>。
+        $safe = (string)preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $safe);
+        $safe = (string)preg_replace('/\[STYLE-TAG[^\]]*\].*?\[\/STYLE-TAG[^\]]*\]/is', '', $safe);
+
         self::writeCache($key, $safe);
         return $safe;
     }
@@ -66,11 +72,19 @@ final class RichHtml
             . '.acg-rich :where(a){text-decoration:underline;text-underline-offset:2px}'
             . '</style>';
 
-        //商户描述里自带的 <style> 会经 IgnoreStyleTagFilter 原样放行 → 全页 CSS 注入（篡改/钓鱼浮层/
-        //外连信标）。展示层统一剥掉描述里的 <style>（含其占位形态），只保留上面这套可信排版样式；
-        //富文本标签（加粗/列表/图片/链接等）不受影响。
-        $html = (string)preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html);
-        $html = (string)preg_replace('/\[STYLE-TAG\].*?\[\/STYLE-TAG\]/is', '', $html);
+        //描述里可能带 <style>：既有商户可能塞恶意 CSS，也有插件（如次元博客的「相关文档」卡片）通过
+        //0x51 钩子把带样式的区块注入进 description。所以不能一律剥掉——改为与 IgnoreStyleTagFilter 同一套
+        //CSS 净化：解码 CSS 转义后判定，命中会执行脚本/外连的构造（@import/expression/behavior/外链 url 等）
+        //即整块丢弃，保留正常排版样式。这样插件区块照常显示，商户往描述里塞的危险 CSS 也被中和。
+        //不再处理 [STYLE-TAG] 文本占位符：占位符已带进程盐、只在 WAF 的 purify 周期内存在，正文里
+        //手写的无盐占位符是纯文本，绝不能在这里被凭空还原成 <style>（否则重开二阶还原漏洞）。
+        //去掉任何残留的 [STYLE-TAG…] 文本占位符：正常内容到 present 时真 <style> 早被 WAF 还原(且带进程盐)，
+        //这里出现占位符只可能是攻击者手写——一律删除。只删不还原，既不重开二阶还原漏洞，也免得垃圾文本露在描述里。
+        $html = (string)preg_replace('/\[STYLE-TAG[^\]]*\].*?\[\/STYLE-TAG[^\]]*\]/is', '', $html);
+
+        $html = (string)preg_replace_callback('/<style\b[^>]*>(.*?)<\/style>/is', static function (array $m): string {
+            return '<style>' . \Kernel\Waf\IgnoreStyleTagFilter::sanitizeCss($m[1]) . '</style>';
+        }, $html);
 
         return $style . '<div class="acg-rich">' . $html . '</div>';
     }

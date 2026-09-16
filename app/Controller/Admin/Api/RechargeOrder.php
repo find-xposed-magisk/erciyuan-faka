@@ -7,6 +7,7 @@ use App\Consts\Manage as ManageConst;
 use App\Controller\Base\API\Manage;
 use App\Entity\Query\Get;
 use App\Interceptor\ManageSession;
+use App\Interceptor\Owner;
 use App\Model\ManageLog;
 use App\Model\UserRecharge;
 use App\Service\Query;
@@ -19,7 +20,8 @@ use Kernel\Annotation\Inject;
 use Kernel\Annotation\Interceptor;
 use Kernel\Exception\JSONException;
 
-#[Interceptor(ManageSession::class, Interceptor::TYPE_API)]
+//手工补单(success)=给任意用户加余额(铸币)，充值订单查看/导出含资金流水，全部收敛到站长(type==0)（F-12）
+#[Interceptor([ManageSession::class, Owner::class], Interceptor::TYPE_API)]
 class RechargeOrder extends Manage
 {
     private const MAX_EXPORT_COUNT = 5000;

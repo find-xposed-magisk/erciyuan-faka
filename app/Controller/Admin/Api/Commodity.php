@@ -399,13 +399,9 @@ class Commodity extends Manage
             $map['tags'] = \App\Model\Commodity::normalizeTags($map['tags']);
         }
 
-        //商品介绍是管理员富文本，取未过滤原文入库(#775)，与卡密secret的unsafePost先例一致；商户端保存不豁免
-        if (array_key_exists('description', $map)) {
-            $rawDescription = $request->unsafePost('description');
-            if (is_string($rawDescription) && !str_contains($rawDescription, "\0")) {
-                $map['description'] = $rawDescription;
-            }
-        }
+        //商品介绍是富文本，但必须与商户端同一条 post() 净化管线（HTMLPurifier：去脚本/事件/伪协议、留排版）。
+        //$map['description'] 已经是 $raw（post(NORMAL)=已净化）里的值，这里不再用 unsafePost 原文覆盖它——
+        //否则任意管理员档位即可把可执行 HTML 写进 item.description(∈ RAW_PATHS 原样渲染) → 全站存储型 XSS。
 
         $id = isset($map['id']) ? (int)$map['id'] : 0;
         $current = $id > 0 ? \App\Model\Commodity::query()->find($id) : null;

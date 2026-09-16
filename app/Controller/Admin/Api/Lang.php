@@ -110,10 +110,11 @@ class Lang extends Manage
             throw new JSONException('词条不存在');
         }
 
-        //译文是人工录入的富文本，取未过滤原文
-        $text = $request->unsafePost('text');
+        //译文是人工录入的富文本，走 post() 净化管线（HTMLPurifier：去脚本/事件/伪协议、留排版）。
+        //译文会替换 RAW_PATHS 文本（公告/商品详情等），若取 unsafePost 原文即等于给这些原样渲染点开注入通道。
+        $text = $request->post('text', Filter::NORMAL);
         if (!is_string($text)) {
-            $text = (string)($_POST['text'] ?? '');
+            $text = '';
         }
         $text = trim($text);
         if (str_contains($text, "\0") || mb_strlen($text) > 20000) {

@@ -204,22 +204,9 @@ class Commodity extends User
             //只做 Ini::toArray 语法解析、不校验取值，商户就能写负价 → valuation 算出负数金额 → trade() 命中
             //amount<=0 免支付直发 → 买家 0 元拿卡；若是平台货源商品(shared_id>0)平台还要向上游代付=平台亏损。
             //故与顶层同口径：category/wholesale/category_wholesale/sku 各价格档一律不得为负。
-            $parsedConfig = Ini::toArray((string)$map['config']);
-            foreach (['category', 'wholesale', 'category_wholesale', 'sku'] as $priceSection) {
-                if (!empty($parsedConfig[$priceSection]) && is_array($parsedConfig[$priceSection])) {
-                    array_walk_recursive($parsedConfig[$priceSection], static function ($value): void {
-                        //空值下游按 0(免费)处理，放行。其余必须是「不小于 0 的数字」：
-                        //只拦负数会漏掉 "abc-100"/"−100"(U+2212)/"- 100"/"--100"/"(+100)" 等畸形串，
-                        //它们能存进去、却在 valuation 里 (float)/Decimal 解析时抛异常→估价 500。
-                        if ($value === '' || $value === null) {
-                            return;
-                        }
-                        if (!is_numeric($value) || (float)$value < 0) {
-                            throw new JSONException("商品价格配置必须是不小于0的数字哦(｡￫‿￩｡)");
-                        }
-                    });
-                }
-            }
+            //顶层 config 与 level_price 内层 config 是两条同源的价格通道，共用同一套非负/数字校验，
+            //避免任一处遗漏(见 Commodity::assertConfigPricesNonNegative)。
+            \App\Model\Commodity::assertConfigPricesNonNegative(Ini::toArray((string)$map['config']));
         }
 
         //校验会员等级独立配置，脏数据入库会导致登录用户的商品列表整体报错

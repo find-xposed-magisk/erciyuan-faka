@@ -29,11 +29,30 @@
 
 
     $('.save-data').click(function () {
-        util.post("/user/api/security/phone", util.getFormData('.form-data'), res => {
-            message.success("绑定成功");
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        })
+        //改绑需登录密码二次验证（后端强制校验，F-33）：仅凭会话不足以改绑，防会话被窃后被改到攻击者手机。
+        message.prompt({
+            title: i18n('身份验证'),
+            input: 'password',
+            html: `<span style="font-size:14px;">${i18n('为保证账号安全，请输入登录密码以确认修改')}</span>`,
+            inputAttributes: {
+                autocomplete: 'current-password',
+                onpaste: 'return false'
+            },
+            confirmButtonText: `${i18n('确认修改')}`,
+            inputValidator: function (value) {
+                return (!value && i18n("请输入登录密码"));
+            }
+        }).then(res => {
+            if (res.isConfirmed === true) {
+                const data = util.getFormData('.form-data');
+                data.password = res.value;
+                util.post("/user/api/security/phone", data, res => {
+                    message.success("绑定成功");
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                });
+            }
+        });
     });
 }();

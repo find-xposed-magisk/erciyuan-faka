@@ -17,7 +17,7 @@
         const secret = map.secret ?? '';
         const escaped2 = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         const escaped = escaped2(secret);
-        const leaveMessage = map?.commodity?.leave_message ? `<div style="margin-top:12px">${escaped2(map.commodity.leave_message)}</div>` : '';
+        const leaveMessage = map?.commodity?.leave_message ? `<div style="margin-top:12px;white-space:pre-line">${escaped2(map.commodity.leave_message)}</div>` : '';
         layer.open({
             type: 1,
             title: `${util.icon("fa-duotone fa-regular fa-eye")} ${i18n('查看卡密')}`,

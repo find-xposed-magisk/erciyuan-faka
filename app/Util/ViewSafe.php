@@ -52,10 +52,12 @@ final class ViewSafe
             }
 
             if (in_array($path, self::RAW_PATHS, true)) {
+                $data[$key] = self::neutralizeActive($value);
                 continue;
             }
 
             if ($ownerTrusted && self::ownerHtml($path, (string)$key)) {
+                $data[$key] = self::neutralizeActive($value);
                 continue;
             }
 
@@ -65,6 +67,30 @@ final class ViewSafe
         }
 
         return $data;
+    }
+
+    /**
+     * RAW_PATHS 与 owner=0 名称是「不转义原样输出」的汇点。写入端已统一走 post()/RichHtml 净化管线，
+     * 这里是**渲染侧兜底**：去掉可执行脚本、外部执行体标签、事件处理器与伪协议——即使将来某个写入端漏了
+     * 净化，注入的 <script> 也到不了页面（否则会被 Csp::injectNonce 自动配发合法 nonce 而变成可执行，
+     * 见 F-50）。**不动 <style>**：正文排版与插件卡片的作用域样式靠它，且已由 RichHtml/IgnoreStyleTagFilter
+     * 做过 CSS 净化。
+     */
+    public static function neutralizeActive(string $value): string
+    {
+        if ($value === '' || strpos($value, '<') === false) {
+            return $value;
+        }
+        //成对 / 残缺的 <script>，以及可载入外部执行体的标签
+        $value = (string)preg_replace('#<script\b[^>]*>.*?</script\s*>#is', '', $value);
+        $value = (string)preg_replace('#<\s*/?\s*(?:script|iframe|object|embed)\b[^>]*>#i', '', $value);
+        //事件处理器属性 on*=...（带双引号 / 单引号 / 裸值三种形态）
+        $value = (string)preg_replace('#\son[a-z0-9_\-]+\s*=\s*"[^"]*"#i', '', $value);
+        $value = (string)preg_replace("#\son[a-z0-9_\-]+\s*=\s*'[^']*'#i", '', $value);
+        $value = (string)preg_replace('#\son[a-z0-9_\-]+\s*=\s*[^\s>]+#i', '', $value);
+        //href/src/action 等属性里的伪协议
+        $value = (string)preg_replace('#((?:href|src|xlink:href|action|formaction|poster)\s*=\s*["\']?)\s*(?:javascript|vbscript)\s*:#i', '$1#', $value);
+        return $value;
     }
 
     private static function ownerHtml(string $path, string $key): bool

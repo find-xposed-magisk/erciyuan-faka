@@ -15,7 +15,7 @@
         secret = secret ?? '';
         const escaped = String(secret).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         //发货留言与游客查询页(index/query.js)保持一致，商家富文本原样渲染
-        const leaveMessage = leave ? `<div style="margin-top:12px">${leave}</div>` : '';
+        const leaveMessage = leave ? `<div style="margin-top:12px;white-space:pre-line">${leave}</div>` : '';
         layer.open({
             type: 1,
             title: `${util.icon("fa-duotone fa-regular fa-eye")} ${i18n('查看卡密')}`,
