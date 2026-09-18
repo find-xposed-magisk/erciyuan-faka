@@ -238,8 +238,8 @@ class Index extends User
                 $var = $userCommodityMap[$val['id']];
 
                 if ($var->premium > 0) {
-                    $data[$key]['price'] = $var->applyRounding((new Decimal($data[$key]['price'], 2))->mul($var->premium / 100)->add($data[$key]['price'])->getAmount());
-                    $data[$key]['user_price'] = $var->applyRounding((new Decimal($data[$key]['user_price'], 2))->mul($var->premium / 100)->add($data[$key]['user_price'])->getAmount());
+                    $data[$key]['price'] = $var->markup($data[$key]['price']);
+                    $data[$key]['user_price'] = $var->markup($data[$key]['user_price']);
                 }
                 if ($var->name) {
                     $data[$key]['name'] = $var->name;

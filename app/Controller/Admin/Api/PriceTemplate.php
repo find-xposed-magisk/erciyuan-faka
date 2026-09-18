@@ -143,6 +143,10 @@ class PriceTemplate extends Manage
                     'new_user_price' => $computed['user_price'],
                     'level_count' => count($computed['levels']),
                     'category_count' => $computed['category_count'],
+                    //基准来源 + 前几个种类价的前后值：让预览把「种类商品单价为何不动 / 种类价变了多少」说清楚
+                    'base_source' => $computed['base_source'],
+                    'category_changes' => $computed['category_changes'],
+                    'category_changed' => $computed['category_changed'],
                 ];
             }
         }
@@ -292,18 +296,48 @@ class PriceTemplate extends Manage
      */
     private function computePrice(TemplateModel $template, Commodity $commodity): array
     {
-        $basePrice = $template->base === TemplateModel::BASE_FACTORY
-            ? (float)$commodity->factory_price
-            : (float)$commodity->price;
-
-        $round = static fn(string $amount): string => TemplateModel::round($amount, $template->rounding);
         $useFactoryBase = $template->base === TemplateModel::BASE_FACTORY;
+        $basePrice = $useFactoryBase ? (float)$commodity->factory_price : (float)$commodity->price;
+
         $rawConfig = (string)$commodity->getRawOriginal('config');
 
         //种类商品的价格在配置参数里（商品级 factory_price/price 常为 0），
         //这类商品同样可以套模板，只是加价发生在 [category] 上
         $categoryCount = $this->pricedCategoryCount($rawConfig, $useFactoryBase);
         $applicable = $basePrice > 0 || $categoryCount > 0;
+
+        //基准来源。category = 商品级没有基准、按各种类自己的成本/售价加价：对接来的种类商品，上游协议
+        //对种类商品固定发 factory_price=0，每个种类的拿货价在 config[category_factory] 里——成本价一栏为 0
+        //是正常的。下单必须选种类、按种类价收费，单价不参与计价，所以这里**不**拿售价去冒充成本价。
+        $baseSource = $basePrice > 0 ? ($useFactoryBase ? 'factory' : 'price') : ($categoryCount > 0 ? 'category' : 'none');
+
+        //种类价变化样例：预览只画商品单价，纯种类商品看起来像"没变"，把前几个种类价的前后值一并给前端
+        $newConfig = TemplateModel::applyToConfig($rawConfig, $template->guest_type, (float)$template->guest_value, $template->rounding, $useFactoryBase);
+        //已记过 category_factory 的种类价再套同一模板结果不变（幂等），单独数出真正变了几个，
+        //前端据此标「种类价不变」，免得一排 16.00→16.00 看着又像模板没生效
+        $categoryChanges = [];
+        $categoryChanged = 0;
+        try {
+            $before = trim($rawConfig) === '' ? [] : \App\Util\Ini::toArray($rawConfig);
+            $after = trim($newConfig) === '' ? [] : \App\Util\Ini::toArray($newConfig);
+            foreach ((array)($before['category'] ?? []) as $key => $old) {
+                $new = $after['category'][$key] ?? null;
+                if (!is_numeric($old) || !is_numeric($new)) {
+                    continue;
+                }
+                $oldAmount = sprintf('%.2f', (float)$old);
+                $newAmount = sprintf('%.2f', (float)$new);
+                if ($oldAmount !== $newAmount) {
+                    $categoryChanged++;
+                }
+                if (count($categoryChanges) < 3) {
+                    $categoryChanges[] = ['name' => (string)$key, 'old' => $oldAmount, 'new' => $newAmount];
+                }
+            }
+        } catch (\Throwable $e) {
+            $categoryChanges = [];
+            $categoryChanged = 0;
+        }
 
         $levels = [];
         foreach ($template->levelRules() as $groupId => $rule) {
@@ -312,7 +346,7 @@ class PriceTemplate extends Manage
                 continue;
             }
             $levels[$groupId] = [
-                'amount' => $round(TemplateModel::apply($basePrice, $rule['type'], $rule['value'])),
+                'amount' => TemplateModel::priced($basePrice, $rule['type'], $rule['value'], $template->rounding),
                 //每个等级可以有自己的独立配置参数（种类价/批发价/SKU），按该等级的规则一起走
                 'rule' => $rule,
             ];
@@ -321,23 +355,21 @@ class PriceTemplate extends Manage
         return [
             'applicable' => $applicable,
             'category_count' => $categoryCount,
+            'category_changes' => $categoryChanges,
+            'category_changed' => $categoryChanged,
             'base' => sprintf('%.2f', $basePrice),
-            //基准价为 0（纯种类商品）时保持商品单价原样，只让种类价参与加价
+            //factory=按成本价 / price=按当前售价 / category=按各种类的成本或售价（单价不动）/ none=无基准（会被跳过）
+            'base_source' => $baseSource,
+            //基准价为 0（种类商品）时保持商品单价原样，只让种类价参与加价
             'price' => $basePrice > 0
-                ? $round(TemplateModel::apply($basePrice, $template->guest_type, (float)$template->guest_value))
+                ? TemplateModel::priced($basePrice, $template->guest_type, (float)$template->guest_value, $template->rounding)
                 : sprintf('%.2f', (float)$commodity->price),
             'user_price' => $basePrice > 0
-                ? $round(TemplateModel::apply($basePrice, $template->user_type, (float)$template->user_value))
+                ? TemplateModel::priced($basePrice, $template->user_type, (float)$template->user_value, $template->rounding)
                 : sprintf('%.2f', (float)$commodity->user_price),
             'levels' => $levels,
             //商品的「配置参数」：种类单价、批发价、SKU 加价一并按游客价规则处理
-            'config' => TemplateModel::applyToConfig(
-                (string)$commodity->getRawOriginal('config'),
-                $template->guest_type,
-                (float)$template->guest_value,
-                $template->rounding,
-                $template->base === TemplateModel::BASE_FACTORY
-            ),
+            'config' => $newConfig,
         ];
     }
 

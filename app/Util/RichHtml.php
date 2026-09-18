@@ -5,7 +5,8 @@ namespace App\Util;
 
 final class RichHtml
 {
-    private const VERSION = 1;
+    //2：放开圆角/阴影/渐变/flex 等纯视觉 CSS（#952），旧版本缓存的净化结果作废
+    private const VERSION = 2;
 
     private const CACHE_DIR = BASE_PATH . '/runtime/richhtml';
 
@@ -112,6 +113,9 @@ final class RichHtml
 
         $config->set('Attr.EnableID', false);
 
+        //与 WAF 同一套 CSS 放行口径（#952）。必须在 maybeGetRawHTMLDefinition() 之前：它会把配置定稿
+        \Kernel\Waf\ModernCss::configure($config);
+
         if ($def = $config->maybeGetRawHTMLDefinition()) {
             foreach (['section', 'article', 'aside', 'header', 'footer', 'main', 'figure', 'figcaption'] as $tag) {
                 $def->addElement($tag, 'Block', 'Flow', 'Common');
@@ -125,7 +129,9 @@ final class RichHtml
             $def->addAttribute('img', 'height', 'Text');
         }
 
-        return self::$purifier = new \HTMLPurifier($config);
+        self::$purifier = new \HTMLPurifier($config);
+        \Kernel\Waf\ModernCss::install($config);
+        return self::$purifier;
     }
 
     private static function cachePath(string $key): string

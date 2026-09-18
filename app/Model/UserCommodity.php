@@ -5,6 +5,7 @@ namespace App\Model;
 
 
 use Illuminate\Database\Eloquent\Model;
+use Kernel\Util\Decimal;
 
 /**
  * @property int $id
@@ -53,6 +54,32 @@ class UserCommodity extends Model
             self::ROUNDING_CEIL => sprintf("%.2f", ceil((float)$amount)),
             default => $amount,
         };
+    }
+
+    /**
+     * 按本行的加价率对「平台基准价」加价并取整，返回两位小数金额字符串。
+     *
+     * 加价只增不减：结果**永不低于基准价**。ROUNDING_ROUND 是「四舍五入到整元」，会把
+     * 0.1~0.4 元抹掉——对单价 < 0.5 元的商品直接抹成 0.00，命中下单侧 amount<=0 的免支付
+     * 直发闸门 → 分站上任何人 0 元把真实卡密（含货源商品，平台还要向上游代付）搬走。这里把
+     * 取整结果钳回 >= 基准价，堵死这条「四舍五入归零」的免费拿卡路径，同时保留对 >=0.5 元
+     * 商品向上取整到整元的原有体验。
+     *
+     * @param string|int|float $base 平台基准价（金额，两位小数语义）
+     * @return string
+     */
+    public function markup(string|int|float $base): string
+    {
+        $base = (new Decimal((string)$base))->getAmount();
+
+        if ((int)$this->premium <= 0) {
+            return $base;
+        }
+
+        $marked = (new Decimal($base))->mul($this->premium / 100)->add($base)->getAmount();
+        $rounded = $this->applyRounding($marked);
+
+        return bccomp($rounded, $base, 2) < 0 ? $base : $rounded;
     }
 
 

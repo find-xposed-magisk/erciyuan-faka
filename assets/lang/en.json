@@ -4140,5 +4140,16 @@
   "网关 {amount}": "Gateway {amount}",
   "在线支付 {online} · 余额 {balance}": "Online {online} · Balance {balance}",
   "会员与提现": "Members & withdrawals",
-  "其余 {count} 个通道": "{count} more channels"
+  "其余 {count} 个通道": "{count} more channels",
+  "个种类价": "category prices",
+  "种类价不变：": "Category prices unchanged:",
+  "种类商品按所选种类计价，单价不参与加价": "Category product: charged by the selected category; unit price is not marked up",
+  "该商品不支持使用优惠券": "This product does not accept coupons",
+  "商品价格已变动，请刷新页面后重新下单": "The price has changed. Please refresh the page and order again.",
+  "商品价格配置异常，暂时无法下单，请联系商家": "This product's price is misconfigured and can't be ordered right now. Please contact the seller.",
+  "写作模式保留不了这些排版（行内样式、对齐、新窗口打开等），在写作模式里修改并保存后会丢失。仍要切换吗？": "Writing mode can't keep this formatting (inline styles, alignment, open-in-new-window, etc.). It will be lost if you edit and save in writing mode. Switch anyway?",
+  "切换到写作模式": "Switch to writing mode",
+  "切换": "Switch",
+  "内容含写作模式保留不了的排版（行内样式等），已用 HTML 源码模式打开": "This content has formatting writing mode can't keep (inline styles, etc.), so it opened in HTML source mode",
+  "兑现操作过于频繁，请稍后再试": "You are cashing out too frequently. Please try again later"
 }

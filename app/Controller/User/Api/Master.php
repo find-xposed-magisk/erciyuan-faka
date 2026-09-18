@@ -71,6 +71,11 @@ class Master extends User
         $id = (int)($map['id'] ?? 0);
         $categoryId = (int)($map['category_id'] ?? 0);
 
+        //分站主自定义分类名会展示给其分站访客：入库前走 HTMLPurifier 净化（同 setCommodity）。
+        if (isset($map['name']) && is_string($map['name']) && trim($map['name']) !== '') {
+            $map['name'] = \App\Util\RichHtml::sanitize($map['name'], false);
+        }
+
         if ($id != 0) {
             if (!UserCategory::query()->where("user_id", $userId)->find($id)) {
                 throw new JSONException("设置错误，请刷新网页");
@@ -192,6 +197,14 @@ class Master extends User
         $userId = $this->getUser()->id;
         $id = (int)($map['id'] ?? 0);
         $commodityId = (int)($map['commodity_id'] ?? 0);
+
+        //分站主(owner!=0 的商户)自定义的商品名/详情会展示给其分站访客：入库前走 HTMLPurifier 净化，
+        //保留安全 DIY 样式、剥掉 XSS 向量。站长自营内容走后台 admin 控制器、不经此处。
+        foreach (['name', 'description'] as $richField) {
+            if (isset($map[$richField]) && is_string($map[$richField]) && trim($map[$richField]) !== '') {
+                $map[$richField] = \App\Util\RichHtml::sanitize($map[$richField], false);
+            }
+        }
 
         if ($id != 0) {
             if (!UserCommodity::query()->where("user_id", $userId)->find($id)) {

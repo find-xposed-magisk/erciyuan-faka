@@ -1672,8 +1672,12 @@ body {
     }
 }
 
+/* 卡密常是一整串不带空格的链接/密钥：允许在任意字符处换行，否则会顶出卡片被截掉（#956）；
+   pre-wrap 保留原文的连续空格，复制出来与发货内容一致 */
 .card-display {
-    white-space: pre-line;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 /* 新的卡密显示样式 */

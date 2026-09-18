@@ -67,9 +67,15 @@ class Str
      */
     public static function generateRandStr(int $length = 32): string
     {
-        mt_srand();
-        $md5 = md5(uniqid(md5((string)time())) . mt_rand(10000, 9999999));
-        return substr($md5, 0, $length);
+        //改用 CSPRNG：旧实现是 md5(uniqid+mt_rand)，种子是秒级时间、mt_rand 又非密码学随机，
+        //整体可被离线推算——而本函数被 app_key(挂机支付/分销验签密钥)、salt、优惠券/商品编码、
+        //各类会话/一次性令牌广泛使用，可预测即等于密钥/令牌可被爆破或伪造。
+        //保持与旧实现一致的 [0-9a-f] 十六进制字符集与长度语义（调用方多处 strtoupper、且有定宽列依赖），
+        //只把熵源换成 random_bytes。
+        if ($length < 1) {
+            return '';
+        }
+        return substr(bin2hex(random_bytes((int)ceil($length / 2))), 0, $length);
     }
 
     /**

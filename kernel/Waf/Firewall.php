@@ -44,6 +44,9 @@ class Firewall
 
         $config->set('Filter.Custom', [IgnoreStyleTagFilter::make()]);
 
+        //圆角/阴影/渐变/flex 等纯视觉 CSS（#952）。必须在下面任何 getDefinition() 之前：配置一旦定稿就改不了
+        ModernCss::configure($config);
+
         $config->getDefinition('URI')->addFilter(URISchemeFilter::make(), $config);
 
         if ($def = $config->maybeGetRawHTMLDefinition()) {
@@ -122,6 +125,7 @@ class Firewall
         }
 
         $this->HTMLPurifier = new \HTMLPurifier($config);
+        ModernCss::install($config);
     }
 
     public function check(callable $callable): void

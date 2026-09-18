@@ -258,17 +258,33 @@
 
     const cell = 'padding:7px 12px;border-bottom:1px solid rgba(var(--md-on-surface-rgb,60,64,67),.08);';
                     const rows = (impact.preview || []).map(item => {
-                        //种类商品的价格在配置参数里，商品单价不变，标注出来免得以为没生效
-                        const catTip = Number(item.category_count || 0) > 0
-                            ? `<div style="font-size:11px;color:#9aa0a6;margin-top:2px;">${i18n('含')} ${Number(item.category_count)} ${i18n('个种类价，随配置参数一起加价')}</div>`
+                        //种类价的变化直接列出来（前几个），纯种类商品的单价不变，光看单价会以为模板没生效
+                        const changes = Array.isArray(item.category_changes) ? item.category_changes : [];
+                        //已按成本价加过的种类价再套不会变：不变的只写价格不画箭头，全都不变时标出来
+                        const catList = changes.map(c => c.old === c.new
+                            ? `${escapeHtml(plainText(c.name))} ${escapeHtml(c.new)}`
+                            : `${escapeHtml(plainText(c.name))} ${escapeHtml(c.old)}→<b style="color:#1a73e8;">${escapeHtml(c.new)}</b>`).join(' · ');
+                        const catMore = Number(item.category_count || 0) > changes.length ? ` …${i18n('共')} ${Number(item.category_count)} ${i18n('个种类价')}` : '';
+                        const catSame = Number(item.category_changed || 0) === 0 ? i18n('种类价不变：') : '';
+                        const catTip = changes.length > 0
+                            ? `<div style="font-size:11px;color:#9aa0a6;margin-top:2px;white-space:normal;">${catSame}${catList}${catMore}</div>`
+                            : (Number(item.category_count || 0) > 0
+                                ? `<div style="font-size:11px;color:#9aa0a6;margin-top:2px;">${i18n('含')} ${Number(item.category_count)} ${i18n('个种类价，随配置参数一起加价')}</div>`
+                                : '');
+                        //种类商品（含对接来的：上游对种类商品固定发成本价 0，拿货价按种类放在配置参数里）：
+                        //下单按所选种类收费，单价不参与，基准列留空、单价不高亮，免得把没变的单价看成「新价格」
+                        const byCategory = item.base_source === 'category';
+                        const sourceTip = byCategory
+                            ? `<div style="font-size:11px;color:#9aa0a6;margin-top:2px;white-space:normal;">${i18n('种类商品按所选种类计价，单价不参与加价')}</div>`
                             : '';
+                        const newCell = byCategory ? `${cell}text-align:right;color:#9aa0a6;` : `${cell}text-align:right;font-weight:700;color:#1a73e8;`;
                         return `<tr>
-                        <td style="${cell}">${escapeHtml(plainText(item.name))}${catTip}</td>
-                        <td style="${cell}text-align:right;">${escapeHtml(item.base)}</td>
+                        <td style="${cell}">${escapeHtml(plainText(item.name))}${catTip}${sourceTip}</td>
+                        <td style="${cell}text-align:right;">${byCategory ? '—' : escapeHtml(item.base)}</td>
                         <td style="${cell}text-align:right;color:#9aa0a6;">${escapeHtml(item.old_price)}</td>
-                        <td style="${cell}text-align:right;font-weight:700;color:#1a73e8;">${escapeHtml(item.new_price)}</td>
+                        <td style="${newCell}">${escapeHtml(item.new_price)}</td>
                         <td style="${cell}text-align:right;color:#9aa0a6;">${escapeHtml(item.old_user_price)}</td>
-                        <td style="${cell}text-align:right;font-weight:700;color:#1a73e8;">${escapeHtml(item.new_user_price)}</td>
+                        <td style="${newCell}">${escapeHtml(item.new_user_price)}</td>
                     </tr>`;
                     }).join('');
 

@@ -53,6 +53,28 @@ class PriceTemplate extends Model
         };
     }
 
+    /**
+     * 按规则加价再取整。凡是「基准价 → 加价 → 取整」都走这里，别再手拼 round(apply())。
+     *
+     * 取整不许把价格挪到基准价以下，也不许把正价挪成 0：「四舍五入到整元」会把 1.40×1.05=1.47
+     * 抹成 1.00（低于进价，每单亏 0.40）、把 0.30×1.6=0.48 抹成 0.00（对接商品因此买不了，
+     * 自营商品可能被当成 0 元单直接发货）。命中时改为向上取整。降价规则（加价值为负）本来就
+     * 低于基准价，只保证不被取整抹成 0。
+     */
+    public static function priced(float $basePrice, int $type, float $value, int $rounding): string
+    {
+        $marked = self::apply($basePrice, $type, $value);
+        $rounded = self::round($marked, $rounding);
+        if ($basePrice <= 0 || bccomp($rounded, $marked, 2) >= 0) {
+            return $rounded;
+        }
+
+        $base = sprintf('%.2f', $basePrice);
+        $floor = bccomp($marked, $base, 2) >= 0 ? $base : '0.01';
+
+        return bccomp($rounded, $floor, 2) < 0 ? sprintf('%.2f', ceil((float)$marked)) : $rounded;
+    }
+
     public static function applyToConfig(string $config, int $type, float $value, int $rounding, bool $useFactoryBase = false): string
     {
         if (trim($config) === '') {
@@ -65,7 +87,7 @@ class PriceTemplate extends Model
             return $config;
         }
 
-        $priced = static fn($amount): string => self::round(self::apply((float)$amount, $type, $value), $rounding);
+        $priced = static fn($amount): string => self::priced((float)$amount, $type, $value, $rounding);
 
         $base = static function (array &$parsed, string $factorySection, array $path, $amount) use ($useFactoryBase) {
             if (!$useFactoryBase) {
@@ -171,13 +193,12 @@ class PriceTemplate extends Model
     public function forShared(string $config, string $price, string $userPrice, string $levelPrice = ''): array
     {
         $base = (float)$price;
-        $round = fn(string $amount): string => self::round($amount, $this->rounding);
 
         $levels = [];
         if ($base > 0) {
             foreach ($this->levelRules() as $groupId => $rule) {
                 $levels[$groupId] = [
-                    'amount' => $round(self::apply($base, $rule['type'], $rule['value'])),
+                    'amount' => self::priced($base, $rule['type'], $rule['value'], $this->rounding),
                     'rule' => $rule,
                 ];
             }
@@ -185,10 +206,10 @@ class PriceTemplate extends Model
 
         return [
             'price' => $base > 0
-                ? $round(self::apply($base, $this->guest_type, (float)$this->guest_value))
+                ? self::priced($base, $this->guest_type, (float)$this->guest_value, $this->rounding)
                 : sprintf('%.2f', $base),
             'user_price' => $base > 0
-                ? $round(self::apply($base, $this->user_type, (float)$this->user_value))
+                ? self::priced($base, $this->user_type, (float)$this->user_value, $this->rounding)
                 : sprintf('%.2f', (float)$userPrice),
             'config' => self::applyToConfig($config, $this->guest_type, (float)$this->guest_value, $this->rounding, false),
             'level_price' => self::mergeLevelPrice($levelPrice, $levels, $this->rounding, false),
@@ -202,7 +223,7 @@ class PriceTemplate extends Model
         }
 
         return $this->guest_type === self::TYPE_PERCENT
-            ? self::round(self::apply($amount, self::TYPE_PERCENT, (float)$this->guest_value), $this->rounding)
+            ? self::priced($amount, self::TYPE_PERCENT, (float)$this->guest_value, $this->rounding)
             : sprintf('%.2f', $amount);
     }
 

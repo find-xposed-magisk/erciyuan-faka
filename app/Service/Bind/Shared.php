@@ -750,8 +750,16 @@ class Shared implements \App\Service\Shared
         $_tmp = new Decimal($price, 2);
         $price = $type == 0 ? $_tmp->add($premium)->getAmount() : $_tmp->add((new Decimal($premium, 3))->mul($price)->getAmount())->getAmount();
 
-        $_tmp = new Decimal($userPrice, 2);
-        $userPrice = $type == 0 ? $_tmp->add($premium)->getAmount() : $_tmp->add((new Decimal($premium, 3))->mul($userPrice)->getAmount())->getAmount();
+        //上游会员价留空(0)的意思是「会员按零售价」，本地 memberPrice() 同样回退零售价——留空就保持留空。
+        //以前对 0 照样加价：固定加价后本地会员价变成「加价额本身」（上游 10 元、+1 → 会员价 1.00），
+        //登录买家 1 元买走、平台向上游付 10 元。SharedStock 插件与 items() 树发的都是原始 0；
+        //核心 3.7.1+ 的 item() 已先回退成零售价，不受影响。
+        if (!is_numeric($userPrice) || (float)$userPrice <= 0) {
+            $userPrice = '0.00';
+        } else {
+            $_tmp = new Decimal($userPrice, 2);
+            $userPrice = $type == 0 ? $_tmp->add($premium)->getAmount() : $_tmp->add((new Decimal($premium, 3))->mul($userPrice)->getAmount())->getAmount();
+        }
 
         return ["config" => $_config, "price" => $price, "user_price" => $userPrice];
     }

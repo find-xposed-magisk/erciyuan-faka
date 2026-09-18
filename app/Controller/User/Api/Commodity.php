@@ -100,6 +100,16 @@ class Commodity extends User
             $map['cover'] = preg_replace('/[\x00-\x20"\'<>`();\\\\\x7F]+/', '', $map['cover']);
         }
 
+        //商户(本控制器 owner 恒为登录商户，!=0)可写的富文本字段：入库前统一走 HTMLPurifier 净化——
+        //保留加粗/彩色等安全 DIY 样式，剥掉 <script>/onerror/javascript: 等 XSS 向量（与 description
+        //出站净化同一套 RichHtml::sanitize）。站长自营商品走后台 admin 控制器、不经此处，DIY 完全不受影响。
+        //config/widget 是结构化数据(非 HTML)，不能过 HTMLPurifier，此处不处理。
+        foreach (['name', 'leave_message'] as $richField) {
+            if (isset($map[$richField]) && is_string($map[$richField]) && trim($map[$richField]) !== '') {
+                $map[$richField] = \App\Util\RichHtml::sanitize($map[$richField], false);
+            }
+        }
+
         $id = isset($map['id']) ? (int)$map['id'] : 0;
         $isCreate = $id <= 0;
         $commodity = null;

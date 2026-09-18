@@ -260,6 +260,13 @@ class Order implements \App\Service\Order
             }
         }
 
+        //商品的「优惠卷」开关以前只有前台模板在看（关着就不显示优惠券框），接口从不校验：
+        //全站通用券直调接口照样能用在关了券的商品上——对接商品导入时默认关券，100% 券把金额压到 0，
+        //又恰好是 0 元拦截放行的「优惠券单」，平台照付上游全价。放在 $num 判断之前，多件购买同样拦。
+        if (!empty($coupon) && (int)$commodity->coupon !== 1) {
+            throw new JSONException("该商品不支持使用优惠券");
+        }
+
         if (!empty($coupon) && $num == 1) {
             $voucher = Coupon::query()->where("code", $coupon)->first();
 
@@ -479,6 +486,71 @@ class Order implements \App\Service\Order
         }
     }
 
+    /**
+     * 这个商品「本身是否有价值」——用于判断一笔算出 0 元的订单是合法的免费商品，还是被压到 0 的攻击/误配。
+     *
+     * 只要满足任一条即视为「有价值」，就不允许 0 元直发：
+     *   - 有成本(factory_price>0) 或 是转售/货源商品(shared_id>0)——0 元发货等于平台/上游净亏；
+     *   - 零售价或会员价任一为正；
+     *   - config 里任一价格档(category/wholesale/category_wholesale)为正。
+     * 全都为 0 才是「本就免费」的商品(零售价 0、无档、无成本、非货源)，允许 0 元直发。
+     * sku 是加价项、draft_premium 是溢价项，都只增不减，不参与「基础价值」判定。
+     */
+    private function commodityHasPositiveValue(Commodity $commodity): bool
+    {
+        if ((float)$commodity->factory_price > 0 || (int)$commodity->shared_id > 0) {
+            return true;
+        }
+        if ((float)$commodity->price > 0 || (float)$commodity->user_price > 0) {
+            return true;
+        }
+        $config = Ini::toArray((string)$commodity->config);
+        foreach (['category', 'wholesale', 'category_wholesale'] as $section) {
+            if (empty($config[$section]) || !is_array($config[$section])) {
+                continue;
+            }
+            $positive = false;
+            array_walk_recursive($config[$section], static function ($value) use (&$positive): void {
+                if (is_numeric($value) && (float)$value > 0) {
+                    $positive = true;
+                }
+            });
+            if ($positive) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 对接商品不许亏本卖：本站实收（顾客实付扣掉分站返利、推广分成）不能低于上游对本站账号的实时报价。
+     *
+     * 本地售价只在详情页被访问时才跟上游同步，种类/批发/SKU 还要另开配置同步，普通加价从不碰等级价，
+     * 汇率也会变——上游一涨价，本地就在不知情的情况下按旧价一直亏着卖（rent 算了却从来没人比）。
+     * 只在拿到实时报价时判断，询价失败照旧放行；用了优惠券的单是站长主动让利（要先打开商品的优惠卷开关），不拦。
+     *
+     * @throws JSONException
+     */
+    private function assertNotBelowUpstreamCost(int $commodityId, mixed $quotedRent, string|int|float $amount, string|int|float $rebate, string|int|float $divideAmount, bool $couponApplied): void
+    {
+        if ($couponApplied || !is_numeric($quotedRent) || (float)$quotedRent <= 0) {
+            return;
+        }
+
+        $net = new Decimal($amount, 2);
+        (float)$rebate > 0 && $net = $net->sub($rebate);
+        (float)$divideAmount > 0 && $net = $net->sub($divideAmount);
+        //报价换算过汇率时可能带 6 位小数，截到分再比，别因为不到 1 分钱的换算误差拦单
+        $cost = (new Decimal(sprintf('%.6F', (float)$quotedRent), 6))->getAmount();
+
+        if (bccomp($net->getAmount(), $cost, 2) < 0) {
+            throw new JSONException(\App\Util\SharedPayload::guardMessage(
+                "对接商品[{$commodityId}]本单实收 {$net->getAmount()} 低于上游进价 {$cost}，已拒绝下单：请开启价格同步或调高加价",
+                "商品价格已变动，请刷新页面后重新下单"
+            ));
+        }
+    }
+
     public function trade(?User $user, ?UserGroup $userGroup, array $map): array
     {
         $commodityId = (int)$map['item_id'];
@@ -633,6 +705,8 @@ class Order implements \App\Service\Order
         }
 
         $amount = $this->valuation($commodity, $num, $race, $sku, $cardId, $coupon, $userGroup);
+        //对接商品的上游实时报价（询价失败为 0）；下面的 getCost 兜底只是本地估算，不能拿来判断亏本
+        $quotedRent = $rent;
         $rent == 0 && $rent = $this->getCost($commodity, $num, $race, $sku, $cardId);
         $rebate = 0;
         $divideAmount = 0;
@@ -676,6 +750,10 @@ class Order implements \App\Service\Order
             }
         } else {
             $from = 0;
+        }
+
+        if ($commodity->shared) {
+            $this->assertNotBelowUpstreamCost((int)$commodity->id, $quotedRent, $amount, $rebate, $divideAmount, !empty($coupon) && $num == 1);
         }
 
         $pay = Pay::query()->find($payId);
@@ -795,6 +873,13 @@ class Order implements \App\Service\Order
 
             $url = "";
             if ((float)$order->amount <= 0) {
+                //0 元直发**只对「本就免费」的商品成立**：零售价/会员价/各价格档全为 0、无成本、非货源。
+                //否则一个被留空或填 0 的价格档、分站四舍五入抹零、100% 会员折扣，或对接方选中 0 价档，
+                //都会让 valuation 算出 0 → 命中这里把**有价值的真实卡密**免费发出去（货源商品平台还要向上游代付）。
+                //有价值的商品却算出 ≤0、且不是满额优惠券抵扣的，一律判为配置异常/被利用，拒单。
+                if (empty($order->coupon_id) && $this->commodityHasPositiveValue($lockedCommodity)) {
+                    throw new JSONException("商品价格配置异常，暂时无法下单，请联系商家");
+                }
                 $order->amount = "0.00";
                 $order->save();
                 $secret = $this->orderSuccess($order);

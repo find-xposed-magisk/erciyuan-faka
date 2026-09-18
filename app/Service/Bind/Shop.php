@@ -386,29 +386,29 @@ class Shop implements \App\Service\Shop
         $config = $commodity->config ?: [];
 
         if ($userCommodity->premium > 0) {
-            $commodity->price = $userCommodity->applyRounding((new Decimal($commodity->price))->mul($userCommodity->premium / 100)->add($commodity->price)->getAmount());
-            $commodity->user_price = $userCommodity->applyRounding((new Decimal($commodity->user_price))->mul($userCommodity->premium / 100)->add($commodity->user_price)->getAmount());
+            $commodity->price = $userCommodity->markup($commodity->price);
+            $commodity->user_price = $userCommodity->markup($commodity->user_price);
 
             if ($commodity->draft_premium > 0) {
-                $commodity->draft_premium = $userCommodity->applyRounding((new Decimal($commodity->draft_premium))->mul($userCommodity->premium / 100)->add($commodity->draft_premium)->getAmount());
+                $commodity->draft_premium = $userCommodity->markup($commodity->draft_premium);
             }
 
             if (is_array($config['category'])) {
                 foreach ($config['category'] as &$price) {
-                    $price = $userCommodity->applyRounding((new Decimal($price))->mul($userCommodity->premium / 100)->add($price)->getAmount());
+                    $price = $userCommodity->markup($price);
                 }
             }
 
             if (is_array($config['wholesale'])) {
                 foreach ($config['wholesale'] as &$price) {
-                    $price = $userCommodity->applyRounding((new Decimal($price))->mul($userCommodity->premium / 100)->add($price)->getAmount());
+                    $price = $userCommodity->markup($price);
                 }
             }
 
             if (is_array($config['category_wholesale'])) {
                 foreach ($config['category_wholesale'] as &$arr) {
                     foreach ($arr as &$price) {
-                        $price = $userCommodity->applyRounding((new Decimal($price))->mul($userCommodity->premium / 100)->add($price)->getAmount());
+                        $price = $userCommodity->markup($price);
                     }
                 }
             }
@@ -416,7 +416,7 @@ class Shop implements \App\Service\Shop
             if (is_array($config['sku'])) {
                 foreach ($config['sku'] as &$arr) {
                     foreach ($arr as &$price) {
-                        $price = $userCommodity->applyRounding((new Decimal($price))->mul($userCommodity->premium / 100)->add($price)->getAmount());
+                        $price = $userCommodity->markup($price);
                     }
                 }
             }
@@ -448,7 +448,7 @@ class Shop implements \App\Service\Shop
         }
 
         if ($userCommodity->premium > 0) {
-            return $userCommodity->applyRounding((new Decimal($amount))->mul($userCommodity->premium / 100)->add($amount)->getAmount());
+            return $userCommodity->markup($amount);
         }
 
         return (string)$amount;
