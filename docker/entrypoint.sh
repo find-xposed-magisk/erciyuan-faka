@@ -22,11 +22,17 @@ mkdir -p \
     "${DATA}/secrets"
 chmod 700 "${DATA}/secrets"
 
-# 后台"基础设置"会把上传的 Logo 写到 /favicon.ico，落到持久化目录里免得容器重建后丢失
+# 网站公开路径 /favicon.ico 是指向 assets/cache/favicon.ico 的软链，实际图片在数据卷里；
+# 后台"基础设置"上传的 Logo 写进的就是这个文件，容器重启、重建都不会丢
 if [ ! -f "${DATA}/assets_cache/favicon.ico" ] && [ -f /usr/local/share/acg-faka/favicon.ico ]; then
     cp /usr/local/share/acg-faka/favicon.ico "${DATA}/assets_cache/favicon.ico"
 fi
 if [ ! -L favicon.ico ]; then
+    # 兼容旧版保存逻辑：它会用上传的图片把这个软链替换成普通文件，图片只留在容器可写层。
+    # 同一个容器重启时先把它迁进数据卷，再恢复软链（镜像里的 favicon.ico 本身就是软链，不会误伤）
+    if [ -f favicon.ico ] && [ -s favicon.ico ]; then
+        cp favicon.ico "${DATA}/assets_cache/favicon.ico"
+    fi
     rm -f favicon.ico
     ln -s assets/cache/favicon.ico favicon.ico
 fi
