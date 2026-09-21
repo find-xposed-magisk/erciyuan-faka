@@ -205,6 +205,9 @@ class Commodity extends Model
             if (!is_array($var)) {
                 throw new JSONException("会员等级[{$groupId}]的配置格式错误");
             }
+            if (isset($var['amount']) && trim((string)$var['amount']) !== '' && !preg_match('/^\d+(\.\d{1,2})?$/', trim((string)$var['amount']))) {
+                throw new JSONException("会员等级[{$groupId}]的价格必须是不小于0且最多两位小数的数字");
+            }
             try {
                 $parsed = Ini::toArray((string)($var['config'] ?? ""));
             } catch (JSONException $e) {
@@ -237,6 +240,9 @@ class Commodity extends Model
                     }
                     if (!is_numeric($value) || (float)$value < 0) {
                         throw new JSONException("商品价格配置必须是不小于0的数字哦(｡￫‿￩｡)");
+                    }
+                    if (!preg_match('/^\d+(\.\d{1,2})?$/', trim((string)$value))) {
+                        throw new JSONException("商品价格配置最多两位小数");
                     }
                 });
             }

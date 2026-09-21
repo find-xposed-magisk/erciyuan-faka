@@ -880,7 +880,9 @@ class Order implements \App\Service\Order
                 if ((float)$order->amount < 0) {
                     throw new JSONException("商品价格配置异常，暂时无法下单，请联系商家");
                 }
-                if (empty($order->coupon_id) && $this->commodityHasPositiveValue($lockedCommodity)) {
+                if ($this->commodityHasPositiveValue($lockedCommodity)
+                    && (empty($order->coupon_id)
+                        || bccomp($this->valuation($lockedCommodity, $num, $race, $sku, $cardId, null, $userGroup), "0", 2) <= 0)) {
                     throw new JSONException("商品价格配置异常，暂时无法下单，请联系商家");
                 }
                 $order->amount = "0.00";
