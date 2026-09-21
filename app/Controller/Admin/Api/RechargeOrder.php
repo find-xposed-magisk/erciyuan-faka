@@ -63,6 +63,7 @@ class RechargeOrder extends Manage
      */
     private function exportQuery(array $raw): array
     {
+        $raw = \App\Util\SearchFilter::decode($raw);
         $query = UserRecharge::query();
         $hasFilter = false;
         $handled = [];

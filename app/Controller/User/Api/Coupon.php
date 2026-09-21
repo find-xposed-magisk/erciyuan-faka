@@ -81,6 +81,10 @@ class Coupon extends User
             throw new JSONException("请输入有效的代券面值");
         }
 
+        if (!in_array($mode, [0, 1], true)) {
+            throw new JSONException("抵扣模式不正确");
+        }
+
         if ($mode === 1 && $money > 1) {
             throw new JSONException("百分比抵扣请填写 0 到 1 之间的小数");
         }

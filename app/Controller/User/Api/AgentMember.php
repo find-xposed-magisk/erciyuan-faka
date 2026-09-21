@@ -48,13 +48,24 @@ class AgentMember extends User
      */
     public function transfer(): array
     {
-        $to = $this->request->post("id");
-        $amount = $this->request->post("amount", Filter::FLOAT);
-        $userId = $this->getUser()->id;
-
-        if ($to == $userId) {
-            throw new JSONException("非法操作");
+        $rawTo = $this->request->post("id", Filter::NORMAL);
+        $rawTo = is_scalar($rawTo) ? trim((string)$rawTo) : '';
+        if (!preg_match('/^\d+$/', $rawTo)) {
+            throw new JSONException("目标账号不正确");
         }
+        $to = (int)$rawTo;
+        $userId = (int)$this->getUser()->id;
+
+        if ($to === $userId) {
+            throw new JSONException("不能给自己转账");
+        }
+
+        $rawAmount = $this->request->post("amount", Filter::NORMAL);
+        $rawAmount = is_scalar($rawAmount) ? trim((string)$rawAmount) : '';
+        if (!preg_match('/^\d+(\.\d{1,2})?$/', $rawAmount) || (float)$rawAmount <= 0) {
+            throw new JSONException("转账金额不正确，必须大于 0 且最多两位小数");
+        }
+        $amount = (float)$rawAmount;
 
         DB::connection()->getPdo()->exec("set session transaction isolation level serializable");
         Db::transaction(function () use ($to, $amount, $userId) {

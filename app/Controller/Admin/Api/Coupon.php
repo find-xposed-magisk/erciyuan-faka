@@ -114,6 +114,8 @@ class Coupon extends Manage
      */
     private function couponExportQuery(array $raw): array
     {
+        //券码筛选在前端由 equal-code 改名而来，同样带着搜索栏多出的那层编码
+        $raw = \App\Util\SearchFilter::decode($raw, ['coupon_code_secret']);
         $allowedKeys = [
             'coupon_code_secret',
             'equal-note',

@@ -66,6 +66,7 @@ class Order extends Manage
      */
     private function orderExportQuery(array $raw): array
     {
+        $raw = \App\Util\SearchFilter::decode($raw);
         $query = \App\Model\Order::query();
         $hasFilter = false;
         $handled = [];

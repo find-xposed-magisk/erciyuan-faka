@@ -57,6 +57,7 @@ class Bill extends Model
      */
     public static function create(User|int|string $user, float $amount, int $type, string $log, int $currency = 0, bool $total = true): void
     {
+        $amount = round($amount, 2);
         if ($amount <= 0) {
             throw new JSONException("非法操作");
         }

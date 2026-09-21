@@ -144,6 +144,7 @@ class Card extends Manage
      */
     private function cardExportQuery(array $raw): array
     {
+        $raw = \App\Util\SearchFilter::decode($raw);
         $query = \App\Model\Card::query();
         $hasFilter = false;
         $stringFilters = [

@@ -314,12 +314,12 @@ class Order implements \App\Service\Order
                 throw new JSONException("该优惠券已过期");
             }
 
-            if ($voucher->mode == 0 && $voucher->money >= $price->getAmount()) {
-                return "0";
-            }
-
-            $deduction = $voucher->mode == 0 ? $voucher->money : $price->mul($voucher->money)->getAmount();
-            $price = $price->sub($deduction);
+            $deduction = $voucher->mode == 0
+                ? (new Decimal($voucher->money, 2))->getAmount()
+                : $price->mul($voucher->money)->getAmount();
+            $price = bccomp($deduction, $price->getAmount(), 2) >= 0
+                ? new Decimal("0", 2)
+                : $price->sub($deduction);
         }
 
         return $price->mul($num)->getAmount();
@@ -877,6 +877,9 @@ class Order implements \App\Service\Order
                 //否则一个被留空或填 0 的价格档、分站四舍五入抹零、100% 会员折扣，或对接方选中 0 价档，
                 //都会让 valuation 算出 0 → 命中这里把**有价值的真实卡密**免费发出去（货源商品平台还要向上游代付）。
                 //有价值的商品却算出 ≤0、且不是满额优惠券抵扣的，一律判为配置异常/被利用，拒单。
+                if ((float)$order->amount < 0) {
+                    throw new JSONException("商品价格配置异常，暂时无法下单，请联系商家");
+                }
                 if (empty($order->coupon_id) && $this->commodityHasPositiveValue($lockedCommodity)) {
                     throw new JSONException("商品价格配置异常，暂时无法下单，请联系商家");
                 }
