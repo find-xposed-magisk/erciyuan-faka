@@ -35,7 +35,7 @@ class URISchemeFilter extends \HTMLPurifier_URIFilter
             return true;
         }
 
-        if (!LinkDomainGuard::enabled() || LinkDomainGuard::allows($host)) {
+        if (!LinkDomainGuard::enabled() || LinkDomainGuard::adminRequest() || LinkDomainGuard::allows($host)) {
             return true;
         }
 

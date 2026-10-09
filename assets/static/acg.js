@@ -371,7 +371,7 @@ let acg = {
             acg.API.tradeAmount({
                 success: res => {
                     $(instance).html(acgCurrencySymbol() + (res.price * $("input[name=num]").val()));
-                    $('.price').html(acgCurrencySymbol() + res.price);
+                    $('.price').html(acg.API.priceHtml(res.price));
                     if (res.hasOwnProperty("card_count")) {
                         let instance = $('.card_count');
                         if (acg.property.cache.inventoryHidden == 1) {
@@ -741,15 +741,7 @@ let acg = {
                             }
                             continue;
                         } else if (autoKey == "price") {
-                            if (res.login) {
-                                instance.html(acgCurrencySymbol() + res.user_price);
-                            } else {
-                                let user = "";
-                                if (res.user_price < res.price) {
-                                    user = '<span class="price_tips">(' + acgT("会员价") + ':' + acgCurrencySymbol() + res.user_price + ') <a style="color: #6d97d5;" href="/user/authentication/login?goto=' + encodeURIComponent(res.share_url) + '" target="_blank">' + acgT("现在就去登录!") + '</a></span>';
-                                }
-                                instance.html(acgCurrencySymbol() + res.price + ' ' + user);
-                            }
+                            instance.html(acg.API.priceHtml(res.login ? res.user_price : res.price, false));
                             continue;
                         } else if (autoKey == "trade_amount") {
                             if (res.login) {
@@ -855,6 +847,21 @@ let acg = {
         }, captcha(obj) {
             $(obj).attr("src", "/user/captcha/image?action=trade&rand=" + Math.ceil(Math.random() * 10000000));
         },
+        //单价 + 游客的会员价提示。估价刷新单价时也走这里，否则提示一闪就被覆盖（issue #1125）。
+        //只有当前单价就是商品原价时提示才准：种类价、规格加价、批发价、优惠券对会员同样生效，
+        //这些情况下会员实际付的也不是 user_price，不提示，免得误导。
+        //settled=false 是打开商品时还没估价：有规格/批发配置的先不提示，等估价结果再定，避免一闪即逝
+        priceHtml(price, settled = true) {
+            const item = acg.property.cache.item || {};
+            const memberPrice = Number(item.user_price);
+            const current = Number(price);
+            let html = acgCurrencySymbol() + price;
+            const pending = !settled && !(this.isEmptyOrNotJson(item?.config?.sku) && this.isEmptyOrNotJson(item?.config?.wholesale));
+            if (!item.login && !pending && this.isEmptyOrNotJson(item?.config?.category) && current === Number(item.price) && memberPrice > 0 && memberPrice < current) {
+                html += ' <span class="price_tips">(' + acgT("会员价") + ':' + acgCurrencySymbol() + item.user_price + ') <a style="color: #6d97d5;" href="/user/authentication/login?goto=' + encodeURIComponent(item.share_url) + '" target="_blank">' + acgT("现在就去登录!") + '</a></span>';
+            }
+            return html;
+        },
         isEmptyOrNotJson(val) {
             if (val === null || val === undefined) return true;
 
@@ -933,7 +940,10 @@ function acgSecretPopup(res) {
             '.acg-secret__note-title svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;' +
             'stroke-linecap:round;stroke-linejoin:round;}' +
             '.acg-secret__note-body{font-size:13px;line-height:1.75;white-space:pre-line;word-break:break-word;max-height:180px;overflow:auto;}' +
-            '.acg-secret__note-body p:last-child{margin-bottom:0;}';
+            '.acg-secret__note-body p:last-child{margin-bottom:0;}' +
+            // File rows come from acgDelivery (ready.js); same dialog layout as assets/user/js/treasure.js.
+            '.acg-secret .acg-delivery{--acg-delivery-radius:10px;}' +
+            '.acg-secret__btn:focus-visible{outline:2px solid currentColor;outline-offset:2px;}';
         document.head.appendChild(st);
     }
 
@@ -941,13 +951,33 @@ function acgSecretPopup(res) {
     var esc = secret.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     var ICON_COPY = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
     var ICON_DOWN = '<svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>';
+    var ICON_TEXT = '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
     var ICON_INFO = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
+    var button = function (act, icon, label) {
+        return '<button type="button" class="acg-secret__btn" data-acg-act="' + act + '">' + icon + '<span>' + acgT(label) + '</span></button>';
+    };
 
     //发货留言是商家富文本，与购买记录页/查询页一致原样渲染；没配就整块不出现
     var note = res.leave_message
         ? '<div class="acg-secret__note"><div class="acg-secret__note-title">' + ICON_INFO + '<span>' +
           acgT('使用说明') + '</span></div><div class="acg-secret__note-body">' + res.leave_message + '</div></div>'
         : '';
+
+    // File cards (needs ready.js): one row per file; "copy all" = text lines + clean links and the
+    // .txt is only offered, as "下载文本", while text lines remain.
+    var delivery = window.acgDelivery && window.acgDelivery.hasFile(secret) ? window.acgDelivery : null;
+    var view = delivery ? {meta: res.delivery_files, textClass: 'acg-secret__code', layout: 'compact', scroll: true} : null;
+    var body = '<div class="acg-secret__code">' + esc + '</div>';
+    var bar = button('copy', ICON_COPY, '复制') + button('download', ICON_DOWN, '下载');
+    var plain = secret;
+    if (delivery) {
+        var hasText = delivery.textOf(secret).trim() !== '';
+        plain = delivery.plain(secret);
+        // layer sizes the dialog from the markup it opens with; the live rows replace it in success.
+        body = delivery.render(secret, view).outerHTML;
+        bar = (hasText || delivery.files(secret).length > 1 ? button('copy', ICON_COPY, '复制全部') : '') +
+            (hasText ? button('download', ICON_TEXT, '下载文本') : '');
+    }
 
     layer.open({
         type: 1,
@@ -956,24 +986,23 @@ function acgSecretPopup(res) {
         //手机端原本是 100%x100% 铺满全屏，一行卡密配一整屏空白，更难看
         area: [Math.min((window.innerWidth || 460) - 32, 460) + 'px', 'auto'],
         shadeClose: false,
-        content: '<div class="acg-secret">' +
-            '<div class="acg-secret__code">' + esc + '</div>' +
-            '<div class="acg-secret__bar">' +
-                '<button type="button" class="acg-secret__btn" data-acg-act="copy">' + ICON_COPY + '<span>' + acgT('复制') + '</span></button>' +
-                '<button type="button" class="acg-secret__btn" data-acg-act="download">' + ICON_DOWN + '<span>' + acgT('下载') + '</span></button>' +
-            '</div>' + note + '</div>',
+        content: '<div class="acg-secret' + (delivery ? ' acg-secret--files' : '') + '">' + body +
+            (bar ? '<div class="acg-secret__bar">' + bar + '</div>' : '') + note + '</div>',
         btn: ['<span style="color:white;">' + acgT('查看更多信息/下载') + '</span>'],
         success: function (layero) {
+            if (delivery) {
+                layero.find('.acg-secret > .acg-delivery').replaceWith(delivery.render(secret, view));
+            }
             layero.find('[data-acg-act="copy"]').on('click', function () {
-                var done = function () { layer.msg(acgT('卡密已复制')); };
+                var done = function () { layer.msg(acgT(delivery ? '已复制' : '卡密已复制')); };
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(secret).then(done, function () { fallbackCopy(secret, done); });
+                    navigator.clipboard.writeText(plain).then(done, function () { fallbackCopy(plain, done); });
                 } else {
-                    fallbackCopy(secret, done);
+                    fallbackCopy(plain, done);
                 }
             });
             layero.find('[data-acg-act="download"]').on('click', function () {
-                var blob = new Blob([secret], {type: 'text/plain;charset=utf-8'});
+                var blob = new Blob([plain], {type: 'text/plain;charset=utf-8'});
                 var url = URL.createObjectURL(blob);
                 var a = document.createElement('a');
                 a.href = url;

@@ -9,6 +9,7 @@ use App\Entity\Query\Get;
 use App\Interceptor\UserSession;
 use App\Interceptor\Waf;
 use App\Service\Query;
+use App\Util\CardFile\Link;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Kernel\Annotation\Inject;
@@ -27,6 +28,9 @@ class PurchaseRecord extends User
     {
         $map = $this->request->post();
         $get = new Get(\App\Model\Order::class);
+        //只回传买家需要的列：rent/cost/pay_cost/rebate/divide_amount/premium 等是商户/平台成本，绝不下发给买家。
+        //commodity_id/pay_id 必须保留，否则 with(commodity/pay) 关联加载不到。
+        $get->setColumn('id', 'trade_no', 'sku', 'secret', 'password', 'amount', 'pay_id', 'commodity_id', 'create_time', 'pay_time', 'delivery_status', 'status', 'card_num', 'contact', 'race', 'leave_message');
         $get->setPaginate((int)$this->request->post("page"), (int)$this->request->post("limit"));
         $get->setOrderBy("id", "desc");
         $get->setWhere($map);
@@ -63,6 +67,10 @@ class PurchaseRecord extends User
         unset($item);
 
         hook(Hook::USER_API_PURCHASE_RECORD_LIST, $data);
+        // After the plugins: links re-pointed to this origin, metadata matching the final text.
+        if (is_array($data['list'] ?? null)) {
+            $data['list'] = Link::decorateRows($data['list']);
+        }
         return $this->json(data: $data);
     }
 

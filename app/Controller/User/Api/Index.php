@@ -18,6 +18,7 @@ use App\Model\UserCommodity;
 use App\Service\Query;
 use App\Service\Shared;
 use App\Service\Shop;
+use App\Util\CardFile\Link;
 use App\Util\Client;
 use App\Util\Throttle;
 use App\Util\Tree;
@@ -336,10 +337,12 @@ class Index extends User
             $get->setFilterColumns(['draft']);
             $get->setColumn('id', 'draft', 'draft_premium');
 
-            $data = $this->query->get($get, function (Builder $builder) use ($map) {
+            //商品现在没有种类时，卡上残留的旧种类不算数（与拉卡同口径）
+            $byRace = \App\Util\Sku::hasCategories(\App\Util\Sku::selectionConfig($commodity));
+            $data = $this->query->get($get, function (Builder $builder) use ($map, $byRace) {
                 $builder = $builder->where("commodity_id", $map['item_id'])->where("status", 0);
 
-                if (!empty($map['race'])) {
+                if ($byRace && !empty($map['race'])) {
                     $builder = $builder->where("race", $map['race']);
                 }
 
@@ -384,22 +387,60 @@ class Index extends User
 
 
     /**
+     * 估价。本接口免登录，带优惠券时就是一个「券码在不在、能不能用」的查询口，所以对带券的失败计数限流；
+     * 不带券、券码有效的估价都不计数，正常选规格、改数量不受影响。
      * @return array
+     * @throws JSONException
      */
     public
     function valuation(): array
     {
-        $price = $this->order->valuation(
-            commodity: (int)$this->request->post("item_id"),
-            num: (int)$this->request->post("num"),
-            race: (string)$this->request->post("race"),
-            sku: (array)$this->request->post("sku"),
-            cardId: (int)$this->request->post("card_id"),
-            coupon: (string)$this->request->post("coupon"),
-            group: $this->getUserGroup()
-        );
+        $coupon = (string)$this->request->post("coupon");
+        $trialKeys = $coupon === '' ? [] : $this->couponTrialKeys();
+        foreach ($trialKeys as $key => $limit) {
+            if (Throttle::reached($key, $limit)) {
+                throw new JSONException("优惠券尝试次数过多，请稍后再试");
+            }
+        }
+
+        try {
+            $price = $this->order->valuation(
+                commodity: (int)$this->request->post("item_id"),
+                num: (int)$this->request->post("num"),
+                race: (string)$this->request->post("race"),
+                sku: (array)$this->request->post("sku"),
+                cardId: (int)$this->request->post("card_id"),
+                coupon: $coupon,
+                group: $this->getUserGroup()
+            );
+        } catch (JSONException $e) {
+            foreach ($trialKeys as $key => $limit) {
+                Throttle::tooMany($key, $limit, 600);
+            }
+            throw $e;
+        }
         $price = $this->shop->getSubstationPrice((int)$this->request->post("item_id"), $price);
         return $this->json(data: ["price" => $price]);
+    }
+
+    /**
+     * 试券计数的维度：IP，加上会话（登录会员按账号，访客按 PHP 会话 cookie）。
+     * 访客换 cookie 就能换会话，所以 IP 那一档是访客的上限；会话那一档挡的是同一账号换 IP 试。
+     * @return array<string, int> key => 10 分钟内允许的失败次数
+     */
+    private function couponTrialKeys(): array
+    {
+        $keys = ["valuation:coupon:ip:" . Client::getAddress() => 30];
+        $user = $this->getUser();
+        if ($user) {
+            $keys["valuation:coupon:uid:" . (int)$user->id] = 10;
+        } else {
+            $sid = (string)($_COOKIE[session_name()] ?? '');
+            if ($sid !== '') {
+                $keys["valuation:coupon:sid:" . md5($sid)] = 10;
+            }
+        }
+        return $keys;
     }
 
 
@@ -529,8 +570,13 @@ class Index extends User
                 unset($item['secret']);
             }
         }
+        unset($item);
 
         hook(Hook::USER_API_INDEX_QUERY_LIST, $data);
+        // After the plugins: links re-pointed to this origin, metadata matching the final text.
+        if (is_array($data['list'] ?? null)) {
+            $data['list'] = Link::decorateRows($data['list']);
+        }
         return $this->json(data: $data);
     }
 
@@ -588,10 +634,19 @@ class Index extends User
         }
 
         hook(Hook::USER_API_INDEX_QUERY_SECRET, $order);
-        return $this->json(data: [
-            'secret' => $order->secret,
+        $secret = $order->secret;
+        $deliveryFiles = [];
+        if (is_string($secret)) {
+            [$secret, $deliveryFiles] = Link::decorate($secret);
+        }
+        $data = [
+            'secret' => $secret,
             'widget' => $widget,
             'leave_message' => \App\Model\Order::resolveLeaveMessage($order->leave_message, $order?->commodity?->leave_message)
-        ]);
+        ];
+        if ($deliveryFiles !== []) {
+            $data['delivery_files'] = $deliveryFiles;
+        }
+        return $this->json(data: $data);
     }
 }

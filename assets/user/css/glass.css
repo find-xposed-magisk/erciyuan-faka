@@ -1197,6 +1197,8 @@
 :root[data-theme] .uc-captcha-row .uc-cta.send-captcha:hover { background: rgba(var(--md-primary-rgb), .08); color: var(--md-primary); filter: none; box-shadow: none; }
 :root[data-theme] .uc-captcha-row .uc-cta.send-captcha .material-icons-outlined { font-size: 16px; }
 :root[data-theme] .wx_qrcode { width: 100px; height: 100px; border-radius: 12px; cursor: pointer; background-size: cover; background-position: center; border: 1px solid var(--md-divider); }
+/* 收款码画布按 150px 生成、上传后的图片带 width:100px 内联样式：都缩放进 100px 容器，免得溢出盖住下一块 */
+.wx_qrcode canvas, .wx_qrcode img { display: block; width: 100% !important; height: 100% !important; border-radius: inherit; object-fit: contain; }
 :root[data-theme] .wx_qrcode_temp { font-size: 34px !important; color: var(--md-primary) !important; cursor: pointer; }
 
 /* =============================================================================

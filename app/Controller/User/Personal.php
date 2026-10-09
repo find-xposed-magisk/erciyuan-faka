@@ -40,6 +40,6 @@ class Personal extends User
         header('Content-Type:application/octet-stream');
         header('Content-Transfer-Encoding:binary');
         header('Content-Disposition:attachment; filename=宝贝信息-' . $order->trade_no . '.txt');
-        return (string)$order->secret;
+        return \App\Util\CardFile\Link::decorate((string)$order->secret)[0];
     }
 }

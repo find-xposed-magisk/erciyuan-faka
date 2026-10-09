@@ -84,6 +84,30 @@ CREATE TABLE `__PREFIX__card`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci ROW_FORMAT = DYNAMIC;
 
 
+DROP TABLE IF EXISTS `__PREFIX__card_file`;
+CREATE TABLE `__PREFIX__card_file`  (
+                                        `id` int UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键id',
+                                        `card_id` int UNSIGNED NULL DEFAULT NULL COMMENT '卡密id：NULL=已上传未入库',
+                                        `order_id` int UNSIGNED NULL DEFAULT NULL COMMENT '发货订单id',
+                                        `owner` int UNSIGNED NOT NULL DEFAULT 0 COMMENT '所属会员：0=系统',
+                                        `token` char(48) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '下载令牌',
+                                        `path` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '存储路径(runtime/card-file 下的随机文件名)',
+                                        `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '原文件名',
+                                        `size` bigint UNSIGNED NOT NULL DEFAULT 0 COMMENT '文件大小(字节)',
+                                        `hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'SHA-256',
+                                        `downloads` int UNSIGNED NOT NULL DEFAULT 0 COMMENT '下载次数',
+                                        `last_download_time` datetime NULL DEFAULT NULL COMMENT '最近下载时间',
+                                        `create_time` datetime NOT NULL COMMENT '上传时间',
+                                        PRIMARY KEY (`id`) USING BTREE,
+                                        UNIQUE INDEX `token`(`token` ASC) USING BTREE,
+                                        UNIQUE INDEX `card_id`(`card_id` ASC) USING BTREE,
+                                        INDEX `order_id`(`order_id` ASC) USING BTREE,
+                                        INDEX `owner`(`owner` ASC) USING BTREE,
+                                        INDEX `hash`(`hash` ASC) USING BTREE,
+                                        INDEX `create_time`(`create_time` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci ROW_FORMAT = DYNAMIC;
+
+
 DROP TABLE IF EXISTS `__PREFIX__cash`;
 CREATE TABLE `__PREFIX__cash`  (
                                    `id` int UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键id',

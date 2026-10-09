@@ -16,6 +16,7 @@ use App\Service\Email;
 use App\Service\Query;
 use App\Service\Sms;
 use App\Util\CallbackIpWhitelist;
+use App\Util\CardFile\Policy as CardFilePolicy;
 use App\Util\Client;
 use App\Util\LinkDomainGuard;
 use App\Util\Date;
@@ -57,7 +58,7 @@ class Config extends Manage
         'notice',
         'trade_verification',
         'session_expire',
-
+        'card_file_max_size',
     ];
 
     private const SETTING_BOOLEAN_FIELDS = [
@@ -670,6 +671,14 @@ class Config extends Manage
         if ($sessionExpire > 0 && $sessionExpire < 120) {
             throw new JSONException('会话保持时间必须为 0，或至少 120 秒');
         }
+        $cardFileMaxSize = $this->settingInteger(
+            $post,
+            'card_file_max_size',
+            CardFilePolicy::MIN_MB,
+            CardFilePolicy::MAX_MB,
+            '压缩包大小上限',
+            CardFilePolicy::DEFAULT_MB
+        );
 
         $settings = [
             'closed_message' => $this->settingString($post, 'closed_message', 5000),
@@ -688,6 +697,7 @@ class Config extends Manage
             'forget_type' => $forgetType,
             'notice' => $this->settingString($post, 'notice', 60000),
             'session_expire' => $sessionExpire,
+            'card_file_max_size' => $cardFileMaxSize,
         ];
         foreach (self::SETTING_BOOLEAN_FIELDS as $key) {
             $settings[$key] = $this->settingBoolean($post, $key);
@@ -715,7 +725,7 @@ class Config extends Manage
     {
         $post = $this->configPost(self::SECURITY_REQUEST_FIELDS, '安全设置');
 
-        $ipGetMode = $this->settingInteger($post, 'ip_get_mode', 0, 8, 'CDN 获取 IP 方式');
+        $ipGetMode = $this->settingInteger($post, 'ip_get_mode', 0, count(Client::HEADERS) - 1, 'CDN 获取 IP 方式');
         //后台闲置锁屏分钟数：0=关闭，最长 1440(24 小时)；留空视为默认 15 分钟
         $lockTimeout = $this->settingInteger($post, 'admin_lock_timeout', 0, 1440, '后台锁屏闲置分钟', 15);
         try {

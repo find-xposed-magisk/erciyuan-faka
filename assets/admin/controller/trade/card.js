@@ -5,6 +5,9 @@
     let controllerActive = true;
     const exportControllers = new Set();
     const escapeHtml = value => $('<div>').text(String(value ?? '')).html();
+    // File cards (card_type 2) need card-file-upload.js; without it the page keeps the text-only forms.
+    const fileUploader = () => window.CardFileUploader || null;
+    const cardLabel = row => row?.file?.name || row?.secret || '';
 
     if (typeof window.__mdTradeCardDestroy === 'function') window.__mdTradeCardDestroy();
 
@@ -101,8 +104,14 @@
     const uploadCard = () => {
         let skuRevision = 0;
         const createForms = [];
+        const refresh = () => {
+            if (controllerActive && table) table.refresh();
+        };
+        const fileCards = fileUploader() ? fileUploader().cardForm({isActive: () => controllerActive, done: refresh}) : null;
         component.popup({
-            submit: '/admin/api/card/save',
+            submit: fileCards ? fileCards.submit : '/admin/api/card/save',
+            submitRoute: '/admin/api/card/save',
+            renderComplete: fileCards ? fileCards.renderComplete : undefined,
             tab: [
                 {
                     name: util.icon("fa-duotone fa-regular fa-folder-arrow-up") + i18n(" 上传卡密"),
@@ -200,15 +209,12 @@
                             dict: [
                                 {id: 0, name: "普通卡密"},
                                 {id: 1, name: "账号/预告"}
-                            ],
+                            ].concat(fileCards ? [fileCards.typeOption] : []),
                             change: (form, val) => {
-                                if (val == 0) {
-                                    form.show("general_card");
-                                    form.hide("account_card");
-                                } else {
-                                    form.hide("general_card");
-                                    form.show("account_card");
-                                }
+                                const type = Number(val);
+                                type === 0 ? form.show("general_card") : form.hide("general_card");
+                                type === 1 ? form.show("account_card") : form.hide("account_card");
+                                fileCards && fileCards.switchType(form, type);
                             }
                         },
                         {
@@ -246,6 +252,7 @@ ACC_JP_6M_0KLD-22MM-PP31║${i18n('地区')}:${i18n('日区')}·${i18n('时长')
         </div>`);
                             }
                         },
+                        fileCards ? fileCards.field() : null,
                         {
                             title: false,
                             name: "secret",
@@ -261,30 +268,40 @@ ACC_JP_6M_0KLD-22MM-PP31║${i18n('地区')}:${i18n('日区')}·${i18n('时长')
                             type: "switch",
                             text: "启用（保持数据唯一，会占用CPU资源）"
                         },
-                    ]
+                    ].filter(Boolean)
                 },
             ],
             autoPosition: true,
             height: "auto",
             width: "680px",
-            done: () => {
-                if (controllerActive && table) table.refresh();
-            }
+            done: refresh
         });
     }
     const modal = (title, assign = {}) => {
+        // A file card's content is the stored archive: show it read-only and never post `secret`.
+        const file = assign?.file || null;
         component.popup({
             submit: '/admin/api/card/edit',
             tab: [
                 {
                     name: title,
                     form: [
+                        file ? {
+                            title: false,
+                            name: "card_file",
+                            type: "custom",
+                            complete: (form, dom) => {
+                                dom.html(fileUploader() ? fileUploader().fileNote(file) : escapeHtml(file.name));
+                            }
+                        } : null,
                         {
                             title: "卡密信息",
                             name: "secret",
                             type: "textarea",
                             placeholder: "卡密信息",
-                            required: true
+                            required: !file,
+                            hide: Boolean(file),
+                            submit: file ? false : undefined
                         },
                         {
                             title: "预告内容",
@@ -311,7 +328,7 @@ ACC_JP_6M_0KLD-22MM-PP31║${i18n('地区')}:${i18n('日区')}·${i18n('时长')
                             type: "input",
                             placeholder: "备注信息(可空)，方便查询某次添加的卡密"
                         },
-                    ]
+                    ].filter(Boolean)
                 }
             ],
             assign: assign,
@@ -332,7 +349,10 @@ ACC_JP_6M_0KLD-22MM-PP31║${i18n('地区')}:${i18n('日区')}·${i18n('时长')
         {
             field: 'secret',
             title: '卡密信息',
-            formatter: value => {
+            formatter: (value, row) => {
+                if (row?.file) {
+                    return fileUploader() ? fileUploader().fileChip(row.file) : escapeHtml(row.file.name);
+                }
                 const secret = String(value ?? '');
                 if (!secret) return '-';
                 return `<span class="md-copyable-cell md-copyable-cell--clamp"><span class="md-copyable-cell__value">${escapeHtml(secret)}</span><button type="button" class="md-copyable-cell__copy" aria-label="${i18n('复制卡密')}" title="${i18n('复制卡密')}">${util.icon("fa-duotone fa-regular fa-copy")}</button></span>`;
@@ -426,7 +446,7 @@ ACC_JP_6M_0KLD-22MM-PP31║${i18n('地区')}:${i18n('日区')}·${i18n('时长')
                     click: (event, value, row, index) => {
                         util.post('/admin/api/card/lock', {list: [row.id]}, res => {
                             if (!controllerActive || !table) return;
-                            message.success(`【${row.secret}】${i18n('已锁定')}`);
+                            message.success(`【${cardLabel(row)}】${i18n('已锁定')}`);
                             table.refresh();
                         });
                     }
@@ -438,7 +458,7 @@ ACC_JP_6M_0KLD-22MM-PP31║${i18n('地区')}:${i18n('日区')}·${i18n('时长')
                     click: (event, value, row, index) => {
                         util.post('/admin/api/card/unlock', {list: [row.id]}, res => {
                             if (!controllerActive || !table) return;
-                            message.success(`【${row.secret}】${i18n('已解锁')}`);
+                            message.success(`【${cardLabel(row)}】${i18n('已解锁')}`);
                             table.refresh();
                         });
                     }

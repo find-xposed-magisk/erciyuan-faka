@@ -282,7 +282,8 @@ class Shop implements \App\Service\Shop
             return $this->getSharedStock($commodity, $race, $sku);
         } else if ($commodity->delivery_way == 0) {
             $card = Card::query()->where("commodity_id", $commodity->id)->where("status", 0);
-            if ($race) $card = $card->where("race", $race);
+            //和拉卡同口径：商品现在没有种类时，卡上残留的旧种类不算数
+            if ($race && \App\Util\Sku::hasCategories(\App\Util\Sku::selectionConfig($commodity))) $card = $card->where("race", $race);
             if (!empty($sku)) {
                 foreach ($sku as $k => $v) {
                     //$k 来自客户端，拼进 JSON 路径 sku->{$k}；非法键会触发坏 JSON 路径→500。按 SKU 键名规则校验。
@@ -348,7 +349,7 @@ class Shop implements \App\Service\Shop
         return $commodity->shared_stock[$hash];
     }
 
-    public function getDraft(Commodity|int|string $commodity, int $cardId): array
+    public function getDraft(Commodity|int|string $commodity, int $cardId, ?string $race = null, ?array $sku = null): array
     {
         if (is_int($commodity)) {
             $commodity = Commodity::query()->find($commodity);
@@ -366,6 +367,13 @@ class Shop implements \App\Service\Shop
 
         if ($card->status != 0) {
             throw new JSONException("此宝贝已被他人抢走");
+        }
+
+        //只按卡号算溢价会让「便宜又有货的规格 + 贵规格的卡号」按便宜价成交，所以要确认卡正是所选规格。
+        //种类与规格都为 null 只出现在对接接口应答旧版下游的询价：它们不带规格，上游下单时仍会比对。
+        if (($race !== null || $sku !== null)
+            && !\App\Util\Sku::cardSelectable((int)$card->id, $race, $sku, \App\Util\Sku::selectionConfig($commodity))) {
+            throw new JSONException(\App\Util\Sku::DRAFT_MISMATCH);
         }
 
         return ["draft_premium" => $card->draft_premium, "cost" => $card->cost];

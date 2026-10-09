@@ -671,6 +671,29 @@
         return descriptor;
     }
 
+    // Race/SKU combinations at zero stock (issue #985); same rule as the desktop stock column.
+    function commoditySkuOutage(row) {
+        var out = Number(row && row.sku_out_count) || 0;
+        if (out < 1 || !(Number(row && row.card_count) > 0)) return null;
+        var all = out >= (Number(row && row.sku_combo_count) || 0);
+        return {all: all, text: all ? i18n('全部规格缺货') : out + ' ' + i18n('个规格缺货')};
+    }
+
+    function commoditySkuOutageField() {
+        var descriptor = field('sku_out_count', i18n('库存'));
+        descriptor.compactLabel = false;
+        descriptor.prominent = false;
+        descriptor.format = function (value, row) {
+            var outage = commoditySkuOutage(row);
+            return outage ? outage.text : '';
+        };
+        descriptor.tone = function (value, row) {
+            var outage = commoditySkuOutage(row);
+            return outage && outage.all ? 'danger' : 'warning';
+        };
+        return descriptor;
+    }
+
     function commodityRecommendField() {
         var descriptor = field('recommend', i18n('推荐状态'));
         descriptor.tone = function (value, row) {
@@ -1087,7 +1110,8 @@
         subtitle: field('name', i18n('商品名称')),
         media: media('cover', 'rounded', 'inventory_2'),
         status: [field('status', i18n('上架状态')), commodityRecommendField()],
-        compactMetricLimit: 3,
+        compactLimit: 5,
+        compactMetricLimit: 4,
         metrics: [
             {
                 field: 'card_count',
@@ -1101,14 +1125,16 @@
                         : '-';
                 }
             },
+            commoditySkuOutageField(),
             commodityPriceField('price', i18n('零售价'), 'success'),
             commodityPriceField('user_price', i18n('会员价')),
             field('order_today_amount', i18n('今日销量'))
         ],
         details: [field('owner', i18n('商家')), field('shared', i18n('对接平台'))],
         actions: {
+            // Declared indexes in commodity.js: 0 edit, 1 clone, 2 ban, 3 unban, 4 delete, 5 add cards.
             primary: [action('operation:0', i18n('编辑商品'))],
-            more: [action('share_url:0', i18n('复制推广链接')), action('operation:1', i18n('克隆商品')), action('operation:3', i18n('添加卡密')), action('operation:2', i18n('删除商品'), { danger: true })],
+            more: [action('share_url:0', i18n('复制推广链接')), action('operation:1', i18n('克隆商品')), action('operation:5', i18n('添加卡密')), action('operation:4', i18n('删除商品'), { danger: true })],
             batch: [
                 selector('.listed', i18n('上架商品'), { role: 'batch' }),
                 selector('.delist', i18n('下架商品'), { role: 'batch' }),

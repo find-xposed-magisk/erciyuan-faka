@@ -40,7 +40,7 @@ class App implements \App\Service\App
         try {
             $form = [
                 "form_params" => $data,
-                "verify" => false
+                "verify" => true
             ];
             if (is_array($cookies)) {
                 $form["cookies"] = CookieJar::fromArray([
@@ -82,7 +82,7 @@ class App implements \App\Service\App
         $response = $this->client->post(self::APP_URL . $uri, [
             "form_params" => $data,
             "headers" => ["appId" => (int)$store['app_id'], "appKey" => _plugin_get_hwid()],
-            "verify" => false
+            "verify" => true
         ]);
         $res = (array)json_decode((string)$response->getBody()->getContents(), true);
 
@@ -111,7 +111,7 @@ class App implements \App\Service\App
         $fileHandle = fopen($path . $fileName, "w+");
         $response = $this->client->post(self::APP_URL . $uri, [
             "form_params" => $data,
-            "verify" => false,
+            "verify" => true,
             "headers" => ["appId" => (int)$store['app_id'], "appKey" => _plugin_get_hwid()],
             RequestOptions::SINK => $fileHandle
         ]);
@@ -576,7 +576,7 @@ class App implements \App\Service\App
         try {
             $form = [
                 "multipart" => $data,
-                "verify" => false
+                "verify" => true
             ];
             $response = $this->client->post(self::APP_URL . "/open/project/upload", $form);
             $res = (array)json_decode((string)$response->getBody()->getContents(), true);

@@ -6,6 +6,26 @@
     const escapeHtml = value => $('<div>').text(String(value ?? '')).html();
     //属性上下文转义（escapeHtml 走 text()->html() 不编码引号，拼进 src="…" 会被属性突破）
     const escapeAttr = value => String(value ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Race/SKU combinations at zero stock (issue #985). A product with no stock at all already reads 0.
+    const skuOutage = item => {
+        const out = Number(item?.sku_out_count || 0);
+        if (out < 1 || !(Number(item?.card_count) > 0)) return null;
+        const all = out >= Number(item?.sku_combo_count || 0);
+        return {all, text: all ? i18n('全部规格缺货') : `${out} ${i18n('个规格缺货')}`};
+    };
+    const skuComboLabel = combo => {
+        const sku = combo?.sku && typeof combo.sku === 'object' ? combo.sku : {};
+        const parts = Object.keys(sku).map(key => `${key}: ${sku[key]}`);
+        if (combo?.race) parts.unshift(combo.race);
+        return parts.join(' / ') || '-';
+    };
+    const skuOutageBadge = item => {
+        const outage = skuOutage(item);
+        if (!outage) return '';
+        const labels = (Array.isArray(item.sku_out) ? item.sku_out : []).map(skuComboLabel);
+        if (Number(item.sku_out_count) > labels.length) labels.push('…');
+        return `<br><a class="badge badge-light-${outage.all ? 'danger' : 'warning'} sku-stock-view" data-id="${Number(item.id)}" href="javascript:void(0);" title="${escapeAttr(labels.join('\n'))}" style="margin-top:4px">${escapeHtml(outage.text)}</a>`;
+    };
     const commodityDeleteNames = (values, fallback) => Array.isArray(values) && values.length
         ? values.map(escapeHtml).join(i18n('、'))
         : escapeHtml(fallback || i18n('所选商品'));
@@ -746,8 +766,15 @@
         if (!controllerActive) return;
         let skuRevision = 0;
         const createForms = [];
+        const refresh = () => {
+            if (controllerActive && table) table.refresh();
+        };
+        // File cards (card_type 2) come from card-file-upload.js; without it the form stays text-only.
+        const fileCards = window.CardFileUploader ? window.CardFileUploader.cardForm({isActive: () => controllerActive, done: refresh}) : null;
         component.popup({
-            submit: '/admin/api/card/save',
+            submit: fileCards ? fileCards.submit : '/admin/api/card/save',
+            submitRoute: '/admin/api/card/save',
+            renderComplete: fileCards ? fileCards.renderComplete : undefined,
             tab: [
                 {
                     name: util.icon("fa-duotone fa-regular fa-folder-arrow-up") + i18n(" 上传卡密"),
@@ -843,15 +870,12 @@
                             dict: [
                                 {id: 0, name: "普通卡密"},
                                 {id: 1, name: "账号/预告"}
-                            ],
+                            ].concat(fileCards ? [fileCards.typeOption] : []),
                             change: (form, val) => {
-                                if (val == 0) {
-                                    form.show("general_card");
-                                    form.hide("account_card");
-                                } else {
-                                    form.hide("general_card");
-                                    form.show("account_card");
-                                }
+                                const type = Number(val);
+                                type === 0 ? form.show("general_card") : form.hide("general_card");
+                                type === 1 ? form.show("account_card") : form.hide("account_card");
+                                fileCards && fileCards.switchType(form, type);
                             }
                         },
                         {
@@ -889,6 +913,7 @@ ACC_JP_6M_0KLD-22MM-PP31║${i18n('地区')}:${i18n('日区')}·${i18n('时长')
         </div>`);
                             }
                         },
+                        fileCards ? fileCards.field() : null,
                         {
                             title: "卡密信息",
                             name: "secret",
@@ -904,15 +929,13 @@ ACC_JP_6M_0KLD-22MM-PP31║${i18n('地区')}:${i18n('日区')}·${i18n('时长')
                             type: "switch",
                             text: "启用（保持数据唯一，会占用CPU资源）"
                         },
-                    ]
+                    ].filter(Boolean)
                 },
             ],
             autoPosition: true,
             height: "auto",
             width: "680px",
-            done: () => {
-                if (controllerActive && table) table.refresh();
-            }
+            done: refresh
         });
     }
 
@@ -997,8 +1020,8 @@ ACC_JP_6M_0KLD-22MM-PP31║${i18n('地区')}:${i18n('日区')}·${i18n('时长')
                 }
                 if (item.delivery_way == 0) {
                     const count = `<a class='sku-stock-view' data-id='${item.id}' title='${i18n('点击查看')}SKU${i18n('详细库存')}' href='javascript:void(0);' style='color: var(--md-primary); font-weight: 600;'>${item.card_count}</a>`;
-                    if (mobileAdminEnabled()) return count;
-                    return count + ` <a class='add-card' data-id='${item.id}' style='color: green;' href='javascript:void(0);'>${i18n('加卡')}</a>`;
+                    if (mobileAdminEnabled()) return count + skuOutageBadge(item);
+                    return count + ` <a class='add-card' data-id='${item.id}' style='color: green;' href='javascript:void(0);'>${i18n('加卡')}</a>` + skuOutageBadge(item);
                 }
                 return item.stock;
             }
@@ -1436,7 +1459,8 @@ ACC_JP_6M_0KLD-22MM-PP31║${i18n('地区')}:${i18n('日区')}·${i18n('时长')
                     skuText = Object.keys(sku).map(k => `${k}: ${sku[k]}`).join(' / ') || '-';
                 }
                 const race = (item.race && item.race !== '-') ? item.race : '-';
-                rows += `<tr><td>${esc(race)}</td><td>${esc(skuText)}</td><td style="color:var(--md-success);font-weight:600">${item.unsold}</td><td>${item.locked}</td><td>${item.sold}</td><td>${item.total}</td></tr>`;
+                const unsold = Number(item.unsold) || 0;
+                rows += `<tr><td>${esc(race)}</td><td>${esc(skuText)}</td><td style="color:var(${unsold > 0 ? '--md-success' : '--md-error'});font-weight:600">${unsold}</td><td>${item.locked}</td><td>${item.sold}</td><td>${item.total}</td></tr>`;
             });
             layer.open({
                 type: 1,

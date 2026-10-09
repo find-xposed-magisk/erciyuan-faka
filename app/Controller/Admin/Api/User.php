@@ -360,6 +360,7 @@ class User extends Manage
      * @throws NotFoundException
      * @throws \ReflectionException
      */
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function del(): array
     {
         if (strtoupper($this->request->method()) !== 'POST') {
@@ -437,6 +438,7 @@ class User extends Manage
     /**
      * @throws JSONException
      */
+    #[Interceptor(Owner::class, Interceptor::TYPE_API)]
     public function shopClosed(): array
     {
         if (strtoupper($this->request->method()) !== 'POST') {

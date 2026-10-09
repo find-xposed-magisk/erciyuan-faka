@@ -218,6 +218,60 @@ final class Schema
         }
     }
 
+    /**
+     * File-card archives (card_file). Ensured before uploads and stocking; identical to
+     * kernel/Install/Install.sql and version/3.8.4/update.php.
+     */
+    public static function ensureCardFileTable(): void
+    {
+        $key = 'card_file';
+        if (isset(self::$checked[$key])) {
+            return;
+        }
+        self::$checked[$key] = true;
+
+        $mark = self::MARK_DIR . '/' . $key;
+        if (is_file($mark)) {
+            return;
+        }
+
+        try {
+            $schema = Manager::schema();
+            if (!$schema->hasTable('card_file')) {
+                $schema->create('card_file', function (Blueprint $table): void {
+                    $table->engine = 'InnoDB';
+                    $table->charset = 'utf8mb4';
+                    $table->collation = 'utf8mb4_general_ci';
+                    $table->increments('id')->comment('主键id');
+                    $table->unsignedInteger('card_id')->nullable()->default(null)->comment('卡密id：NULL=已上传未入库');
+                    $table->unsignedInteger('order_id')->nullable()->default(null)->comment('发货订单id');
+                    $table->unsignedInteger('owner')->default(0)->comment('所属会员：0=系统');
+                    $table->char('token', 48)->comment('下载令牌');
+                    $table->string('path', 160)->comment('存储路径(runtime/card-file 下的随机文件名)');
+                    $table->string('name', 255)->comment('原文件名');
+                    $table->unsignedBigInteger('size')->default(0)->comment('文件大小(字节)');
+                    $table->char('hash', 64)->comment('SHA-256');
+                    $table->unsignedInteger('downloads')->default(0)->comment('下载次数');
+                    $table->dateTime('last_download_time')->nullable()->default(null)->comment('最近下载时间');
+                    $table->dateTime('create_time')->comment('上传时间');
+                    $table->unique('token', 'token');
+                    $table->unique('card_id', 'card_id');
+                    $table->index('order_id', 'order_id');
+                    $table->index('owner', 'owner');
+                    $table->index('hash', 'hash');
+                    $table->index('create_time', 'create_time');
+                });
+            }
+            if (!is_dir(self::MARK_DIR)) {
+                @mkdir(self::MARK_DIR, 0755, true);
+            }
+            @file_put_contents($mark, (string)time());
+            self::$tableKnown['card_file'] = true;
+        } catch (\Throwable $e) {
+            // Not marked: retried on the next request (missing CREATE privilege etc.).
+        }
+    }
+
     /** 后台会话闲置锁屏所需的最近活动时间列。签发/校验会话前兜一次。 */
     public static function ensureManageSessionActivity(): void
     {

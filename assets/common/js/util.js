@@ -237,15 +237,17 @@ const util = new class Util {
      * @param done
      * @param error
      * @param fail
+     * 对象写法另可传 cancel：用户关掉资金验证 / 身份验证弹窗时回调；不传则身份验证取消按 error 处理
      */
     post(url, data, done, error = null, fail = null) {
         let loader = {
             enable: true,
             autoClose: true
         };
-        //资金操作二次验证：重放原请求时带上此标记，避免验证后仍 42002 造成弹框死循环
+        //资金操作二次验证 / 身份验证：重放原请求时带上标记，避免验证后仍 42002 / 42003 造成弹框死循环
         let fundRetried = false;
-        let fundOpts = null;
+        let stepRetried = false;
+        let cancel = null;
         if (typeof url == "object") {
             data = url.hasOwnProperty("data") ? url.data : {};
             done = url.hasOwnProperty("done") ? url.done : null;
@@ -256,11 +258,23 @@ const util = new class Util {
                 autoClose: false
             }) : loader;
             fundRetried = url._fundRetried === true;
+            stepRetried = url._stepRetried === true;
+            cancel = typeof url.cancel === "function" ? url.cancel : null;
             url = url.hasOwnProperty("url") ? url.url : {};
         } else if (typeof data === "function") {
             done = data;
         }
-        fundOpts = {url: url, data: data, done: done, error: error, fail: fail, loader: loader, _fundRetried: true};
+        const replay = (flags) => util.post(Object.assign({
+            url: url, data: data, done: done, error: error, fail: fail, cancel: cancel, loader: loader,
+            _fundRetried: fundRetried, _stepRetried: stepRetried
+        }, flags));
+        const reject = (res) => {
+            if (typeof error === 'function') {
+                error(res);
+            } else if (error !== false) {
+                message.error(res.msg);
+            }
+        };
 
         loader.enable ? Loading.show() : 0;
         util.debugRedacted("POST(↑):" + url, "#ff4f33", data, url, "request");
@@ -274,15 +288,17 @@ const util = new class Util {
                     util.debugRedacted("POST(↓):" + url, "#0bbf4a", res, url, "response");
                     //资金操作需二次验证：弹码→/fundVerify→通过后自动重放原请求一次（覆盖所有资金接口/主题）
                     if (res && res.code === 42002 && !fundRetried) {
-                        util.fundVerify(() => util.post(fundOpts));
+                        util.fundVerify(() => replay({_fundRetried: true}), cancel ? () => cancel(res) : null);
+                        return;
+                    }
+                    //修改收款账号等敏感操作需先确认本人：弹框（动态码或登录密码）→/stepVerify→通过后重放；
+                    //取消时交还调用方（cancel，没传就按失败走 error），主题好恢复按钮与表单
+                    if (res && res.code === 42003 && !stepRetried) {
+                        util.stepVerify(res, () => replay({_stepRetried: true}), () => (cancel ? cancel(res) : reject(res)));
                         return;
                     }
                     if (res.code !== 200) {
-                        if (typeof error === 'function') {
-                            error(res);
-                        } else if (error !== false) {
-                            message.error(res.msg);
-                        }
+                        reject(res);
                         return;
                     }
                     typeof done === 'function' && done(res);
@@ -304,28 +320,63 @@ const util = new class Util {
     }
 
     /**
-     * 资金操作二次验证弹窗（统一的 macOS 液态玻璃样式，自适应白天/黑夜）：
-     * 输入动态码 → /user/api/security/fundVerify，成功后回调 retry 重放原请求。
-     * 自带 DOM 与样式，不依赖 message/SweetAlert，前台任意主题下观感一致。
+     * 资金操作二次验证：输入动态码 → /user/api/security/fundVerify，成功后回调 retry 重放原请求。
      * @param retry
+     * @param cancel 可选：关掉弹窗时回调
      */
-    fundVerify(retry) {
+    fundVerify(retry, cancel = null) {
+        util._verifyDialog({title: "资金操作验证", url: "/user/api/security/fundVerify", done: retry, cancel: cancel});
+    }
+
+    /**
+     * 身份验证（42003）：修改收款账号等敏感操作前确认本人。开了两步验证输入动态码，没开输入登录密码，
+     * 通过后回调 retry 重放原请求；关掉弹窗回调 cancel。说明文字用服务端返回的 msg（已翻译，说明要做什么）。
+     * @param res 42003 响应，data.method = totp | password
+     * @param retry
+     * @param cancel
+     */
+    stepVerify(res, retry, cancel) {
+        util._verifyDialog({
+            title: "身份验证",
+            desc: res && res.msg ? res.msg : "",
+            url: "/user/api/security/stepVerify",
+            password: !!(res && res.data && res.data.method === "password"),
+            done: retry,
+            cancel: cancel
+        });
+    }
+
+    /**
+     * 资金验证与身份验证共用的弹窗（统一的 macOS 液态玻璃样式，自适应白天/黑夜）。
+     * 自带 DOM 与样式，不依赖 message/SweetAlert，前台任意主题下观感一致。
+     * 动态码模式只收数字、输满 6 位自动提交；密码模式按回车或「验证」提交。
+     * @param o {title, desc?, url, password?, done, cancel?}
+     */
+    _verifyDialog(o) {
         const T = (s) => (typeof i18n === "function" ? i18n(s) : s);
         if (document.getElementById("fv-mask")) {
-            return; //已有一个验证框时不重复弹（多个请求同时撞上 42002）
+            //已有一个验证框（多个请求同时撞上）：资金验证照旧只弹一个，身份验证按取消交还调用方
+            typeof o.cancel === "function" && o.cancel();
+            return;
         }
         util._fundVerifyStyle();
 
+        const password = o.password === true;
+        const hint = password ? T("请输入登录密码") : T("请输入验证器上的 6 位动态码");
+        const opener = document.activeElement;
         const mask = document.createElement("div");
         mask.id = "fv-mask";
         mask.className = "fv-mask";
         mask.setAttribute("role", "dialog");
         mask.setAttribute("aria-modal", "true");
-        mask.setAttribute("aria-label", T("资金操作验证"));
+        mask.setAttribute("aria-label", T(o.title));
         mask.innerHTML =
             '<div class="fv-card" role="document">'
             + '<div class="fv-title"></div>'
-            + '<input class="fv-input" type="text" inputmode="numeric" autocomplete="one-time-code" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="6">'
+            + (o.desc ? '<p class="fv-desc" id="fv-desc"></p>' : '')
+            + (password
+                ? '<input class="fv-input" type="password" autocomplete="current-password" maxlength="128">'
+                : '<input class="fv-input" type="text" inputmode="numeric" autocomplete="one-time-code" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="6">')
             + '<div class="fv-err" aria-live="polite"></div>'
             + '<div class="fv-acts">'
             + '<button type="button" class="fv-btn fv-btn--ghost fv-cancel"></button>'
@@ -339,24 +390,44 @@ const util = new class Util {
         const errEl = mask.querySelector(".fv-err");
         const okBtn = mask.querySelector(".fv-ok");
         const cancelBtn = mask.querySelector(".fv-cancel");
-        mask.querySelector(".fv-title").textContent = T("资金操作验证");
-        input.placeholder = T("请输入验证器上的 6 位动态码");
+        mask.querySelector(".fv-title").textContent = T(o.title);
+        if (o.desc) {
+            mask.querySelector(".fv-desc").textContent = o.desc;
+            mask.setAttribute("aria-describedby", "fv-desc");
+        }
+        input.placeholder = hint;
+        input.setAttribute("aria-label", hint);
         okBtn.textContent = T("验证");
         cancelBtn.textContent = T("取消");
+
+        //主题色在深色模式下常是浅色：主按钮文字按主题色重新挑，弹窗开着时切换深浅色也跟着重算
+        const fit = () => util._fitVerifyAccent(card, okBtn);
+        const scheme = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+        const watcher = window.MutationObserver ? new MutationObserver(fit) : null;
+        fit();
+        scheme && scheme.addEventListener && scheme.addEventListener("change", fit);
+        watcher && watcher.observe(document.documentElement, {attributes: true, attributeFilter: ["class", "data-theme", "style"]});
 
         let busy = false;
         let closed = false;
 
-        const close = (after) => {
+        const close = (passed) => {
             if (closed) {
                 return;
             }
             closed = true;
             mask.classList.add("fv-out");
             document.removeEventListener("keydown", onKey, true);
+            scheme && scheme.removeEventListener && scheme.removeEventListener("change", fit);
+            watcher && watcher.disconnect();
             setTimeout(() => {
                 mask.remove();
-                typeof after === "function" && after();
+                opener && typeof opener.focus === "function" && opener.focus();
+                if (passed) {
+                    typeof o.done === "function" && o.done();
+                } else {
+                    typeof o.cancel === "function" && o.cancel();
+                }
             }, 180);
         };
 
@@ -368,13 +439,19 @@ const util = new class Util {
             card.classList.add("fv-shake");
         };
 
+        const settle = () => {
+            busy = false;
+            okBtn.classList.remove("is-loading");
+            okBtn.disabled = cancelBtn.disabled = input.disabled = false;
+        };
+
         const submit = () => {
             if (busy) {
                 return;
             }
-            const code = (input.value || "").replace(/\D/g, "");
-            if (code.length === 0) {
-                showErr(T("请输入验证器上的 6 位动态码"));
+            const value = password ? (input.value || "") : (input.value || "").replace(/\D/g, "");
+            if (value.length === 0) {
+                showErr(hint);
                 input.focus();
                 return;
             }
@@ -382,22 +459,18 @@ const util = new class Util {
             okBtn.classList.add("is-loading");
             okBtn.disabled = cancelBtn.disabled = input.disabled = true;
             util.post({
-                url: "/user/api/security/fundVerify",
-                data: {code: code},
+                url: o.url,
+                data: password ? {password: value} : {code: value},
                 loader: false,
-                done: () => close(() => retry && retry()),
+                done: () => close(true),
                 error: (res) => {
-                    busy = false;
-                    okBtn.classList.remove("is-loading");
-                    okBtn.disabled = cancelBtn.disabled = input.disabled = false;
-                    showErr((res && res.msg) ? res.msg : T("验证码错误"));
+                    settle();
+                    showErr((res && res.msg) ? res.msg : (password ? T("登录密码不正确") : T("动态码不正确")));
                     input.value = "";
                     input.focus();
                 },
                 fail: () => {
-                    busy = false;
-                    okBtn.classList.remove("is-loading");
-                    okBtn.disabled = cancelBtn.disabled = input.disabled = false;
+                    settle();
                     showErr(T("网络异常，请稍后重试"));
                 }
             });
@@ -406,7 +479,7 @@ const util = new class Util {
         function onKey(e) {
             if (e.key === "Escape") {
                 e.preventDefault();
-                close();
+                close(false);
             } else if (e.key === "Enter") {
                 e.preventDefault();
                 submit();
@@ -414,19 +487,21 @@ const util = new class Util {
         }
 
         input.addEventListener("input", () => {
-            input.value = input.value.replace(/\D/g, "").slice(0, 6);
+            if (!password) {
+                input.value = input.value.replace(/\D/g, "").slice(0, 6);
+            }
             if (errEl.classList.contains("is-show")) {
                 showErr("");
             }
-            if (input.value.length === 6) {
+            if (!password && input.value.length === 6) {
                 submit(); //输满 6 位自动提交
             }
         });
         okBtn.addEventListener("click", submit);
-        cancelBtn.addEventListener("click", () => close());
+        cancelBtn.addEventListener("click", () => close(false));
         mask.addEventListener("mousedown", (e) => {
             if (e.target === mask) {
-                close();
+                close(false);
             }
         });
         document.addEventListener("keydown", onKey, true);
@@ -434,6 +509,67 @@ const util = new class Util {
             mask.classList.add("fv-in");
             input.focus();
         });
+    }
+
+    /**
+     * 主按钮文字颜色：先用主题的 --md-on-primary，它和主题色对比不到 4.5:1 时，改用黑、白里对比更高的那个
+     * （任何颜色配黑或白至少有一边 ≥ 4.58:1）。悬停时背景朝远离文字的方向变化，对比只升不降。
+     * @param card
+     * @param button
+     */
+    _fitVerifyAccent(card, button) {
+        const style = getComputedStyle(card);
+        const accent = util._rgb(style.getPropertyValue("--fv-accent")) || util._rgb(getComputedStyle(button).backgroundColor);
+        if (!accent) {
+            return;
+        }
+        const lum = (c) => {
+            const f = (v) => (v /= 255) <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+            return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+        };
+        const base = lum(accent);
+        const ratio = (c) => {
+            const l = lum(c);
+            return (Math.max(l, base) + 0.05) / (Math.min(l, base) + 0.05);
+        };
+        const themed = util._rgb(style.getPropertyValue("--md-on-primary"), accent);
+        const text = themed && ratio(themed) >= 4.5
+            ? themed
+            : (ratio([0, 0, 0]) >= ratio([255, 255, 255]) ? [0, 0, 0] : [255, 255, 255]);
+        const color = "rgb(" + text.join(",") + ")";
+        button.style.color = color;
+        card.style.setProperty("--fv-on-accent", color);
+        card.setAttribute("data-on-accent", lum(text) < base ? "dark" : "light");
+    }
+
+    /**
+     * 任意 CSS 颜色转 sRGB [r, g, b]，半透明时叠在 under（默认白）上；解析不了返回 null。
+     * @param color
+     * @param under
+     * @returns {number[]|null}
+     */
+    _rgb(color, under = null) {
+        color = String(color || "").trim();
+        if (color === "") {
+            return null;
+        }
+        if (!util._rgbContext) {
+            const canvas = document.createElement("canvas");
+            canvas.width = canvas.height = 1;
+            util._rgbContext = canvas.getContext("2d", {willReadFrequently: true});
+        }
+        const ctx = util._rgbContext;
+        ctx.fillStyle = "#010203";
+        ctx.fillStyle = color;
+        if (ctx.fillStyle === "#010203" && color.toLowerCase() !== "#010203") {
+            return null;
+        }
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillRect(0, 0, 1, 1);
+        const d = ctx.getImageData(0, 0, 1, 1).data;
+        const a = d[3] / 255;
+        const back = under || [255, 255, 255];
+        return [0, 1, 2].map((i) => Math.round(d[i] * a + back[i] * (1 - a)));
     }
 
     /**
@@ -449,7 +585,7 @@ const util = new class Util {
             + 'background:rgba(16,14,30,.32);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);opacity:0;transition:opacity .22s cubic-bezier(.22,1,.36,1);'
             + 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,"PingFang SC","Microsoft YaHei",sans-serif}'
             + '.fv-mask.fv-in{opacity:1}.fv-mask.fv-out{opacity:0}'
-            + '.fv-card{--fv-accent:var(--uc-primary,var(--md-primary,#6a5cff));--fv-tint:rgba(255,255,255,.62);--fv-fg:#14121f;--fv-fg-soft:rgba(20,18,31,.56);'
+            + '.fv-card{--fv-accent:var(--uc-primary,var(--md-primary,#6a5cff));--fv-tint:rgba(255,255,255,.62);--fv-fg:#14121f;--fv-fg-soft:rgba(20,18,31,.62);--fv-fg-muted:rgba(20,18,31,.74);--fv-danger:#941a14;'
             + '--fv-field:rgba(255,255,255,.5);--fv-field-line:rgba(20,18,31,.14);--fv-ghost:rgba(20,18,31,.06);--fv-rim:rgba(255,255,255,.9);'
             + 'position:relative;width:min(380px,100%);box-sizing:border-box;padding:26px 24px 22px;border-radius:26px;isolation:isolate;'
             + 'background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 52%),var(--fv-tint);'
@@ -461,20 +597,22 @@ const util = new class Util {
             + 'background:linear-gradient(150deg,var(--fv-rim),rgba(255,255,255,0) 44%,rgba(255,255,255,0) 60%,var(--fv-rim));'
             + '-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);opacity:.7}'
             + '.fv-title{text-align:center;font-size:19px;font-weight:700;letter-spacing:.02em;margin:0 0 18px}'
+            + '.fv-desc{margin:-10px 0 16px;text-align:center;font-size:13.5px;line-height:1.55;color:var(--fv-fg-muted)}'
             + '.fv-input{display:block;width:100%;box-sizing:border-box;height:52px;padding:0 16px;margin:0;border:0;border-radius:15px;outline:none;'
             + 'background:var(--fv-field);box-shadow:inset 0 0 0 1px var(--fv-field-line);color:var(--fv-fg);font-size:18px;letter-spacing:.32em;text-align:center;'
             + '-webkit-appearance:none;appearance:none;transition:box-shadow .2s ease,background-color .2s ease}'
             + '.fv-input::placeholder{color:var(--fv-fg-soft);letter-spacing:normal;font-size:15px}'
             + '.fv-input:focus{background:rgba(255,255,255,.66);box-shadow:inset 0 0 0 1px var(--fv-field-line),0 0 0 3.5px color-mix(in srgb,var(--fv-accent) 32%,transparent)}'
-            + '.fv-err{max-height:0;overflow:hidden;opacity:0;color:#ff3b30;font-size:13px;text-align:center;transition:max-height .2s ease,opacity .2s ease,margin .2s ease}'
+            + '.fv-err{max-height:0;overflow:hidden;opacity:0;color:var(--fv-danger);font-size:13px;text-align:center;transition:max-height .2s ease,opacity .2s ease,margin .2s ease}'
             + '.fv-err.is-show{max-height:40px;opacity:1;margin-top:10px}'
             + '.fv-acts{display:flex;gap:12px;margin-top:20px}'
             + '.fv-btn{flex:1;height:46px;border:0;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s ease,filter .2s ease,background-color .2s ease;font-family:inherit}'
             + '.fv-btn:active{transform:scale(.97)}.fv-btn:focus-visible{outline:2px solid var(--fv-accent);outline-offset:2px}'
             + '.fv-btn--ghost{background:var(--fv-ghost);color:var(--fv-fg)}.fv-btn--ghost:hover{background:color-mix(in srgb,var(--fv-fg) 12%,transparent)}'
-            + '.fv-btn--primary{position:relative;background:var(--fv-accent);color:#fff;box-shadow:0 10px 22px -10px var(--fv-accent)}.fv-btn--primary:hover{filter:brightness(1.06)}'
+            + '.fv-btn--primary{position:relative;background:var(--fv-accent);color:var(--fv-on-accent,#fff);box-shadow:0 10px 22px -10px var(--fv-accent)}.fv-btn--primary:hover{filter:brightness(.94)}'
+            + '.fv-card[data-on-accent="dark"] .fv-btn--primary:hover{filter:brightness(1.06)}'
             + '.fv-btn--primary.is-loading{color:transparent;pointer-events:none}'
-            + '.fv-btn--primary.is-loading::after{content:"";position:absolute;top:50%;left:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:fv-spin .7s linear infinite}'
+            + '.fv-btn--primary.is-loading::after{content:"";position:absolute;top:50%;left:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid color-mix(in srgb,var(--fv-on-accent,#fff) 40%,transparent);border-top-color:var(--fv-on-accent,#fff);border-radius:50%;animation:fv-spin .7s linear infinite}'
             + '@keyframes fv-spin{to{transform:rotate(360deg)}}'
             + '@keyframes fv-shake{10%,90%{transform:translateX(-1px)}30%,70%{transform:translateX(-4px)}50%{transform:translateX(4px)}}'
             + '.fv-card.fv-shake{animation:fv-shake .4s cubic-bezier(.36,.07,.19,.97)}'
@@ -482,10 +620,10 @@ const util = new class Util {
             + '@media (prefers-reduced-motion:reduce){.fv-mask,.fv-card,.fv-card.fv-shake{transition:none;animation:none}}';
         // 暗色：跟随系统，或站点在 <html> 上显式标注的主题（Cartoon 用 data-theme；显式 light 时不转暗）。
         const dark =
-            '@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .fv-card{--fv-tint:rgba(30,30,38,.58);--fv-fg:#f5f5f7;--fv-fg-soft:rgba(235,235,245,.56);--fv-field:rgba(255,255,255,.08);--fv-field-line:rgba(255,255,255,.14);--fv-ghost:rgba(255,255,255,.1);--fv-rim:rgba(255,255,255,.3);'
+            '@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .fv-card{--fv-tint:rgba(30,30,38,.58);--fv-fg:#f5f5f7;--fv-fg-soft:rgba(235,235,245,.6);--fv-fg-muted:rgba(235,235,245,.74);--fv-danger:#ff6961;--fv-field:rgba(255,255,255,.08);--fv-field-line:rgba(255,255,255,.14);--fv-ghost:rgba(255,255,255,.1);--fv-rim:rgba(255,255,255,.3);'
             + 'background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,0) 52%),var(--fv-tint);box-shadow:0 30px 70px -24px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.16)}'
             + ':root:not([data-theme="light"]) .fv-input:focus{background:rgba(255,255,255,.12)}}'
-            + 'html[data-theme="dark"] .fv-card{--fv-tint:rgba(30,30,38,.58);--fv-fg:#f5f5f7;--fv-fg-soft:rgba(235,235,245,.56);--fv-field:rgba(255,255,255,.08);--fv-field-line:rgba(255,255,255,.14);--fv-ghost:rgba(255,255,255,.1);--fv-rim:rgba(255,255,255,.3);'
+            + 'html[data-theme="dark"] .fv-card{--fv-tint:rgba(30,30,38,.58);--fv-fg:#f5f5f7;--fv-fg-soft:rgba(235,235,245,.6);--fv-fg-muted:rgba(235,235,245,.74);--fv-danger:#ff6961;--fv-field:rgba(255,255,255,.08);--fv-field-line:rgba(255,255,255,.14);--fv-ghost:rgba(255,255,255,.1);--fv-rim:rgba(255,255,255,.3);'
             + 'background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,0) 52%),var(--fv-tint);box-shadow:0 30px 70px -24px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.16)}'
             + 'html[data-theme="dark"] .fv-input:focus{background:rgba(255,255,255,.12)}';
         const style = document.createElement("style");

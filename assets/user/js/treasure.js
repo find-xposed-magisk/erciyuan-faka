@@ -29,17 +29,28 @@ const treasure = new class Treasure {
             '.acg-secret__note-title svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;' +
             'stroke-linecap:round;stroke-linejoin:round;}' +
             '.acg-secret__note-body{font-size:13px;line-height:1.75;white-space:pre-line;word-break:break-word;max-height:180px;overflow:auto;}' +
-            '.acg-secret__note-body p:last-child{margin-bottom:0;}';
+            '.acg-secret__note-body p:last-child{margin-bottom:0;}' +
+            // File rows come from acgDelivery (compact layout: the dialog is narrow).
+            '.acg-secret .acg-delivery{--acg-delivery-radius:10px;}' +
+            '.acg-secret__btn:focus-visible{outline:2px solid currentColor;outline-offset:2px;}';
         document.head.appendChild(st);
     }
 
-    show(tradeNo, secret, leaveMessage) {
+    /**
+     * @param {string} tradeNo
+     * @param {string} secret delivered content
+     * @param {string} [leaveMessage] merchant rich text
+     * @param {Object} [deliveryFiles] "delivery_files" of the API: token => {name, size}
+     */
+    show(tradeNo, secret, leaveMessage, deliveryFiles) {
         this.style();
         const text = secret == null ? '' : String(secret);
         const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const iCopy = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
         const iDown = '<svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>';
+        const iText = '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
         const iInfo = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
+        const button = (act, icon, label) => '<button type="button" class="acg-secret__btn" data-acg-act="' + act + '">' + icon + '<span>' + i18n(label) + '</span></button>';
 
         //发货留言是商家富文本，与购买记录页/查询页一致原样渲染；没配就整块不出现
         const note = leaveMessage
@@ -47,28 +58,44 @@ const treasure = new class Treasure {
               i18n('使用说明') + '</span></div><div class="acg-secret__note-body">' + leaveMessage + '</div></div>'
             : '';
 
+        // File cards: one row per file. "Copy all" = text lines + clean links; the .txt is only
+        // offered when text lines exist and is labelled so it is not mistaken for the files.
+        const delivery = window.acgDelivery && window.acgDelivery.hasFile(text) ? window.acgDelivery : null;
+        const view = delivery ? {meta: deliveryFiles, textClass: 'acg-secret__code', layout: 'compact', scroll: true} : null;
+        let body = '<div class="acg-secret__code">' + esc + '</div>';
+        let bar = button('copy', iCopy, '复制') + button('download', iDown, '下载');
+        let plain = text;
+        if (delivery) {
+            const hasText = delivery.textOf(text).trim() !== '';
+            plain = delivery.plain(text);
+            // layer sizes the dialog from the markup it opens with; the live rows replace it in success.
+            body = delivery.render(text, view).outerHTML;
+            bar = (hasText || delivery.files(text).length > 1 ? button('copy', iCopy, '复制全部') : '') +
+                (hasText ? button('download', iText, '下载文本') : '');
+        }
+
         layer.open({
             type: 1,
             title: `${util.icon("fa-duotone fa-regular fa-baby-carriage")} ${i18n('您购买的宝贝信息')}:`,
             //高度交给内容自己撑，卡密只有一行时不再留一大片空白
             area: [Math.min((window.innerWidth || 460) - 32, 460) + 'px', 'auto'],
-            content: '<div class="acg-secret"><div class="acg-secret__code">' + esc + '</div>' +
-                '<div class="acg-secret__bar">' +
-                    '<button type="button" class="acg-secret__btn" data-acg-act="copy">' + iCopy + '<span>' + i18n('复制') + '</span></button>' +
-                    '<button type="button" class="acg-secret__btn" data-acg-act="download">' + iDown + '<span>' + i18n('下载') + '</span></button>' +
-                '</div>' + note + '</div>',
+            content: '<div class="acg-secret' + (delivery ? ' acg-secret--files' : '') + '">' + body +
+                (bar ? '<div class="acg-secret__bar">' + bar + '</div>' : '') + note + '</div>',
             success: function (layero) {
+                if (delivery) {
+                    layero.find('.acg-secret > .acg-delivery').replaceWith(delivery.render(text, view));
+                }
                 layero.find('[data-acg-act="copy"]').on('click', function () {
                     //必须给 error 回调：http 站点下没有 navigator.clipboard，走的是 execCommand，
                     //一旦失败默认是静默的，用户点了没反应还以为已经复制走了
-                    util.copyTextToClipboard(text, function () {
-                        message.success(i18n('卡密已复制'));
+                    util.copyTextToClipboard(plain, function () {
+                        message.success(i18n(delivery ? '已复制' : '卡密已复制'));
                     }, function () {
                         message.error(i18n('复制失败，请手动选中上方内容复制'));
                     });
                 });
                 layero.find('[data-acg-act="download"]').on('click', function () {
-                    const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
+                    const blob = new Blob([plain], {type: 'text/plain;charset=utf-8'});
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;

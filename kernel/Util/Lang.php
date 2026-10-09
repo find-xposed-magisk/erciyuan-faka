@@ -852,7 +852,8 @@ final class Lang
                 $stored += (int)DB::table(self::TABLE)->insertOrIgnore($chunk);
             }
 
-            //已存在的行：机翻可以被词包顶掉；force 时连本扩展上一版的译文一起刷新
+            //已存在的行：缺译占位（0，浏览时先记下、还没有译文）与机翻（1）都让词包顶掉；
+            //force 时连本扩展上一版的译文一起刷新
             foreach (array_chunk($rows, 200) as $chunk) {
                 foreach ($chunk as $row) {
                     //不加 text != 条件：译文碰巧一致的行也要认领 scene，
@@ -862,9 +863,9 @@ final class Lang
                         ->where("lang", $lang);
                     $query = $force
                         ? $query->where(function ($q) use ($scene) {
-                            $q->where("status", 1)->orWhere("scene", $scene);
+                            $q->whereIn("status", [0, 1])->orWhere("scene", $scene);
                         })
-                        : $query->where("status", 1);
+                        : $query->whereIn("status", [0, 1]);
                     $stored += (int)$query->update([
                         "text" => $row["text"],
                         "status" => 2,

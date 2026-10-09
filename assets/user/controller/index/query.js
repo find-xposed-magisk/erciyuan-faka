@@ -170,6 +170,15 @@
         return template;
     }
 
+    // File cards: swap the plain .card-display for download rows (text lines keep the .card-display look).
+    function _MountDelivery($display, secret, files) {
+        const delivery = window.acgDelivery;
+        if (!$display.length || !delivery || !delivery.hasFile(secret)) {
+            return;
+        }
+        $display.replaceWith(delivery.render(secret, {meta: files, textClass: 'card-display'}));
+    }
+
     function _ShowResults(orders) {
         $('.order-results').show();
         $('.no-results').hide();
@@ -178,8 +187,9 @@
         orderList.empty();
 
         orders.forEach(function (order) {
-            const orderItem = _CreateOrderItem(order);
-            orderList.append(orderItem);
+            const $orderItem = $(_CreateOrderItem(order));
+            orderList.append($orderItem);
+            _MountDelivery($orderItem.find('.card-content-no-password .card-display'), order.secret, order.delivery_files);
         });
     }
 
@@ -199,10 +209,12 @@
         $(`.loading-${tradeNo}`).hide();
     }
 
-    function _ShowCardContent(tradeNo, content, leaveMessage = null) {
-        $(`.card-content-${tradeNo}`).html(`<div class="card-content">
+    function _ShowCardContent(tradeNo, content, leaveMessage = null, files = null) {
+        const $box = $(`.card-content-${tradeNo}`).html(`<div class="card-content">
           <div class="card-display">${esc(content)}</div>
-        </div>${leaveMessage ? `<div class="mt-3">${esc(leaveMessage)}</div>` : ""}`).show();
+        </div>${leaveMessage ? `<div class="mt-3">${esc(leaveMessage)}</div>` : ""}`);
+        _MountDelivery($box.find('.card-display'), content, files);
+        $box.show();
     }
 
     $(document).off('click', '.view-card-btn').on('click', '.view-card-btn', function () {
@@ -226,7 +238,7 @@
             loader: false,
             done: res => {
                 _HidePasswordLoading(tradeNo);
-                _ShowCardContent(tradeNo, res?.data?.secret, res?.data?.leave_message);
+                _ShowCardContent(tradeNo, res?.data?.secret, res?.data?.leave_message, res?.data?.delivery_files);
             },
             error: res => {
                 message.error(res.msg ?? i18n("未知错误"));

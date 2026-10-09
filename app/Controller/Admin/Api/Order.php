@@ -11,6 +11,7 @@ use App\Entity\Query\Get;
 use App\Interceptor\ManageSession;
 use App\Model\ManageLog;
 use App\Service\Query;
+use App\Util\CardFile\Link;
 use App\Util\Date;
 use Illuminate\Database\Capsule\Manager as DB;
 use Illuminate\Database\Eloquent\Builder;
@@ -351,6 +352,27 @@ class Order extends Manage
             ]);
         });
 
+        // Display copy only: file links on the origin the admin is using; order.secret is untouched.
+        // File ids let the admin preview through /admin/api/cardFile/download without counting a buyer download.
+        if (is_array($data['list'] ?? null)) {
+            $data['list'] = Link::decorateRows($data['list']);
+            $tokens = [];
+            foreach ($data['list'] as $row) {
+                foreach (array_keys((array)($row['delivery_files'] ?? [])) as $token) {
+                    $tokens[] = (string)$token;
+                }
+            }
+            if ($tokens !== [] && (int)($this->getManage()?->type ?? -1) === 0) {
+                $ids = \App\Model\CardFile::query()->whereIn('token', array_values(array_unique($tokens)))->pluck('id', 'token')->all();
+                foreach ($data['list'] as $index => $row) {
+                    foreach (array_keys((array)($row['delivery_files'] ?? [])) as $token) {
+                        if (isset($ids[$token])) {
+                            $data['list'][$index]['delivery_files'][$token]['id'] = (int)$ids[$token];
+                        }
+                    }
+                }
+            }
+        }
         return $this->json(data: array_merge($data, $raw));
     }
 
@@ -609,8 +631,11 @@ class Order extends Manage
 
             $effect = $options['export_status'] === 1 ? '导出并永久删除' : '导出';
             ManageLog::log($this->getManage(), "[订单导出]{$effect}订单，共计：{$selection['count']}");
-            return ['content' => $content, 'count' => $selection['count']];
+            return ['content' => $content, 'count' => $selection['count'], 'deleted_ids' => $options['export_status'] === 1 ? $ids : []];
         });
+        if ($result['deleted_ids'] !== []) {
+            \App\Util\CardFile\Purge::forOrders($result['deleted_ids']);
+        }
 
         header('Content-Type: text/csv; charset=UTF-8');
         header('Content-Disposition: attachment; filename="订单导出-' . Date::current('YmdHis') . '.csv"');

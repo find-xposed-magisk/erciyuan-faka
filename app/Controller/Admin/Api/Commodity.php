@@ -354,6 +354,7 @@ class Commodity extends Manage
         $clientUrl = Client::getUrl();
         //无限极分类完整路径：一次性加载分类扁平映射，循环内复用避免 N+1
         $categoryFlatMap = $data['list'] ? \App\Model\Category::flatMap() : [];
+        $skuOutages = $this->skuOutages($data['list']);
         foreach ($data['list'] as &$val) {
             $url = $clientUrl;
             if ($val['owner'] && $val['owner']['business']) {
@@ -367,10 +368,30 @@ class Commodity extends Manage
             $val['share_url'] = $url . "/item/{$val['id']}";
             //顶级分类 -> 子分类 -> 商品所属分类
             $val['category_path'] = \App\Model\Category::resolvePath((int)($val['category_id'] ?? 0), $categoryFlatMap);
+            $outage = $skuOutages[(int)$val['id']] ?? null;
+            $val['sku_combo_count'] = $outage['combos'] ?? 0;
+            $val['sku_out_count'] = $outage['out'] ?? 0;
+            $val['sku_out'] = $outage['sample'] ?? [];
         }
 
 
         return $this->json(data: $data);
+    }
+
+    /**
+     * Race / SKU combinations at zero stock for the listed page (issue #985).
+     * The badge is auxiliary, so a failure here must not break the list.
+     * @param array $rows
+     * @return array<int, array{combos: int, out: int, sample: array}>
+     */
+    private function skuOutages(array $rows): array
+    {
+        try {
+            return \App\Util\SkuStock::outages($rows);
+        } catch (\Throwable $e) {
+            \Kernel\Util\Log::inst()->error("[商品规格缺货] " . $e->getFile() . ":" . $e->getLine() . " " . $e->getMessage());
+            return [];
+        }
     }
 
 
@@ -628,6 +649,7 @@ class Commodity extends Manage
 
         $deletedIds = array_values(array_map('intval', (array)($impact['commodity_ids'] ?? [])));
         if ($deletedIds !== []) {
+            \App\Util\CardFile\Purge::sweepOrphans();
             $ebAction = 'delete';
             $ebBefore = null;
             hook(\App\Consts\Hook::COMMODITY_CHANGE_AFTER, $deletedIds, $ebAction, $ebBefore);

@@ -87,10 +87,12 @@ final class ViewSafe
             //可信正文（如商品描述）允许嵌视频 iframe：只留 src 为 https 的、去掉 srcdoc 与不合规的；
             //script/object/embed 照删。留下来的 iframe 上的 on*= 会在下方统一再剥一次。
             $value = self::sanitizeIframes($value);
-            $value = (string)preg_replace('#<\s*/?\s*(?:script|object|embed)\b[^>]*>#i', '', $value);
+            $value = (string)preg_replace('#<\s*/?\s*(?:script|object|embed|meta|base|form|link)\b[^>]*>#i', '', $value);
         } else {
-            $value = (string)preg_replace('#<\s*/?\s*(?:script|iframe|object|embed)\b[^>]*>#i', '', $value);
+            $value = (string)preg_replace('#<\s*/?\s*(?:script|iframe|object|embed|meta|base|form|link)\b[^>]*>#i', '', $value);
         }
+        //meta/base/form/link 是被动危险标签：<meta http-equiv=refresh> 的强制跳转不受 CSP 约束、<base> 劫持相对地址、
+        //<form>/<link> 可做钓鱼/外连，统一在上面随标签一起剥（可信正文/插件注入内容里都不该出现它们）。
         //事件处理器属性 on*=...（带双引号 / 单引号 / 裸值三种形态）
         //分隔符不限于空白：属性值的闭合引号、自闭合斜杠都可紧贴 on*，如 <img src="x"onerror=…>、
         //<svg/onload=…>。用定宽 lookbehind 认 [空白 / " '] 四种边界，命中即剥，不消费边界字符。

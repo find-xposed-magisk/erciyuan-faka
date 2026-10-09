@@ -60,6 +60,12 @@ try {
         $routePath = "user/index/index";
     }
     $_GET['s'] = $routePath;
+    // File-card download link /download/<token>: the path stays as it is (plugins that act on
+    // storefront routes must not see a shop page); only the controller is pinned further down.
+    $_download = preg_match('~^download/([a-f0-9]{48})$~D', $routePath, $_downloadMatch) === 1;
+    if ($_download) {
+        $_GET['token'] = $_downloadMatch[1];
+    }
     Context::set(\Kernel\Context\Interface\Request::class, new Request());
     if (trim($routePath, "/") == 'admin') {
         header('location:' . "/admin/authentication/login");
@@ -96,6 +102,11 @@ try {
     $parameter = explode('.', $ends);
 
     $action = array_shift($parameter);
+
+    if ($_download) {
+        $controller = \App\Controller\User\Download::class;
+        $action = "file";
+    }
 
     $_GET["_PARAMETER"] = Firewall::inst()->xssKiller($parameter);
 
@@ -187,7 +198,7 @@ try {
 } catch (Throwable $e) {
     if ($e instanceof NotFoundException) {
         try {
-            $notFoundRoute = (string)(Context::get(Base::ROUTE) ?? ($_GET['s'] ?? ''));
+            $notFoundRoute = RequestLogger::maskDownloadTokens((string)(Context::get(Base::ROUTE) ?? ($_GET['s'] ?? '')));
             hook(\App\Consts\Hook::HTTP_NOT_FOUND, $notFoundRoute);
         } catch (Throwable $ignored) {
         }

@@ -13,7 +13,10 @@ use Kernel\Util\View;
  */
 class Client
 {
-    private const HEADERS = [
+    /**
+     * 「CDN 获取 IP 方式」的取值就是这张表的下标，后台下拉选项也直接读它
+     */
+    public const HEADERS = [
         'REMOTE_ADDR',
         'HTTP_X_REAL_IP',
         'HTTP_X_FORWARDED_FOR',
@@ -22,10 +25,18 @@ class Client
         'HTTP_X_CLUSTER_CLIENT_IP',
         'HTTP_FORWARDED_FOR',
         'HTTP_FORWARDED',
-        'HTTP_CF_CONNECTING_IP'
+        'HTTP_CF_CONNECTING_IP',
+        'HTTP_CLOUDFRONT_VIEWER_ADDRESS'
     ];
 
     private const CHAIN_HEADER_MODES = [2, 4, 5, 6, 7];
+
+    /**
+     * Amazon CloudFront 的 CloudFront-Viewer-Address：固定是「地址:端口」，IPv6 也不加方括号
+     * （2001:db8:…:60776）。通用的 normalizeIp() 分不出 2001:db8::1:8080 的末段是不是端口，
+     * 只能对这一个头按「最后一段必是端口」剥掉再校验（issue #1126）。
+     */
+    private const MODE_CLOUDFRONT = 9;
     public const MODE_CONFIG = 'ip_get_mode';
 
     /**
@@ -351,6 +362,15 @@ class Client
         if (strlen($value) > self::MAX_PROXY_HEADER_LENGTH) {
             return [];
         }
+        if ($type === self::MODE_CLOUDFRONT) {
+            //单值头：带逗号就不是 CloudFront 写的，整串作废
+            if (str_contains($value, ',')) {
+                return [];
+            }
+            $ip = self::normalizeIp(self::stripViewerPort($value));
+            return $ip === null ? [] : [$ip];
+        }
+
         $elements = explode(',', $value);
         if (count($elements) > self::MAX_PROXY_HEADER_ENTRIES) {
             return [];
@@ -382,6 +402,21 @@ class Client
             }
         }
         return $candidates;
+    }
+
+    /**
+     * 去掉 CloudFront-Viewer-Address 末尾的端口：[IPv6]:端口、IPv4:端口、不带方括号的 IPv6:端口
+     */
+    private static function stripViewerPort(string $value): string
+    {
+        $value = trim($value);
+        if (preg_match('/^\[([0-9a-f:.]+)]:\d{1,5}$/iD', $value, $matches)) {
+            return $matches[1];
+        }
+        if (preg_match('/^([0-9a-f:.]+):\d{1,5}$/iD', $value, $matches)) {
+            return $matches[1];
+        }
+        return $value;
     }
 
     public static function ipMatchesRange(string $ip, string $range): bool

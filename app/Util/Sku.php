@@ -3,6 +3,11 @@ declare(strict_types=1);
 
 namespace App\Util;
 
+use App\Model\Card;
+use App\Model\Commodity;
+use Illuminate\Database\Eloquent\Builder;
+use Kernel\Exception\JSONException;
+
 /**
  * SKU 键名校验。
  *
@@ -18,6 +23,9 @@ class Sku
 {
     /** 键名最大长度（字符） */
     public const MAX_KEY_LENGTH = 32;
+
+    /** 预选卡密不是本单所选的种类 / 规格时给买家的提示（不带卡号与规格值） */
+    public const DRAFT_MISMATCH = '预选卡密与当前所选的种类或规格不一致，请重新选择';
 
     /**
      * 键名是否可安全用于 `sku->{$key}` 的 JSON 路径查询。
@@ -147,6 +155,88 @@ class Sku
                 return false;
             }
             if (!array_key_exists((string)($skuArr[$name] ?? ''), $options)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 商品现在有没有「种类」。
+     */
+    public static function hasCategories(array $config): bool
+    {
+        return !empty($config['category']) && is_array($config['category']);
+    }
+
+    /**
+     * 卡密比对用的商品口径：基础 config，再并上各会员组独立定价里的种类——任一处定义了种类，就按种类比对。
+     * 已经套过会员组的 config（估价时）直接照用。
+     */
+    public static function selectionConfig(Commodity $commodity): array
+    {
+        $config = self::configArray($commodity->config);
+        $categories = self::hasCategories($config) ? $config['category'] : [];
+        foreach ((array)json_decode((string)$commodity->level_price, true) as $level) {
+            $inner = is_array($level) ? self::configArray((string)($level['config'] ?? '')) : [];
+            if (self::hasCategories($inner)) {
+                $categories += $inner['category'];
+            }
+        }
+        if ($categories !== []) {
+            $config['category'] = $categories;
+        }
+        return $config;
+    }
+
+    /**
+     * 卡密按「种类 + 已选规格」筛选：自动发货拉卡与预选卡复核共用这一个口径。
+     * 种类相等（订单没有种类就只认没有种类的卡），已选的每个规格逐键相等。
+     * 传入商品口径（selectionConfig）且商品现在没有种类时，不比种类：卡上残留的旧种类不影响出售。
+     *
+     * @throws JSONException 规格键名或取值不合法
+     */
+    public static function whereCardSelection(Builder $query, ?string $race, ?array $sku, ?array $config = null): Builder
+    {
+        $race = (string)$race;
+        $byRace = $config === null || self::hasCategories($config);
+        if ($byRace && $race !== '') {
+            $query->where('race', $race);
+        } elseif ($byRace) {
+            $query->where(function ($inner) {
+                $inner->whereNull('race')->orWhere('race', '');
+            });
+        }
+
+        foreach ($sku ?? [] as $key => $value) {
+            if (!self::isValidKey((string)$key) || !is_scalar($value)) {
+                throw new JSONException('规格参数不正确');
+            }
+            $query->where("sku->{$key}", (string)$value);
+        }
+
+        return $query;
+    }
+
+    /**
+     * 预选卡是否正是本单所选的种类与规格（估价、下单加锁、发货前复核共用）。
+     * 除了与拉卡同口径的筛选，卡上带的、商品当前定义了选项的规格维度也必须都选了：
+     * 少传一个维度，估价就会漏掉该维度的加价，把贵规格的卡按便宜价报出来。
+     *
+     * @param array $config 商品口径（selectionConfig；估价时是套过会员组的 config）
+     * @throws JSONException
+     */
+    public static function cardSelectable(int $cardId, ?string $race, ?array $sku, array $config): bool
+    {
+        $card = self::whereCardSelection(Card::query()->whereKey($cardId), $race, $sku, $config)->first(['id', 'sku']);
+        if (!$card) {
+            return false;
+        }
+
+        $dimensions = (isset($config['sku']) && is_array($config['sku'])) ? $config['sku'] : [];
+        foreach (array_keys(self::toArray($card->sku)) as $key) {
+            if (!empty($dimensions[$key]) && !array_key_exists($key, $sku ?? [])) {
                 return false;
             }
         }

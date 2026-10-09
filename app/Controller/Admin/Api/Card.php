@@ -9,8 +9,10 @@ use App\Entity\Query\Get;
 use App\Interceptor\ManageSession;
 use App\Model\ManageLog;
 use App\Service\Query;
+use App\Util\CardFile\Purge;
 use App\Util\Date;
 use App\Util\Ini;
+use App\Util\Schema;
 use Illuminate\Database\Capsule\Manager as DB;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -240,8 +242,13 @@ class Card extends Manage
         $get = new Get(\App\Model\Card::class);
         $get->setPaginate((int)$this->request->post("page"), (int)$this->request->post("limit"));
         $get->setWhere($map);
-        $data = $this->query->get($get, function (Builder $builder) {
-            return $builder->with([
+        Schema::ensureCardFileTable();
+        $withFile = Schema::tableExists('card_file');
+        if ($withFile) {
+            \App\Util\CardFile\Purge::collect();
+        }
+        $data = $this->query->get($get, function (Builder $builder) use ($withFile) {
+            $relations = [
                 'owner' => function (Relation $relation) {
                     $relation->select(["id", "username", "avatar"]);
                 },
@@ -251,8 +258,32 @@ class Card extends Manage
                 'order' => function (Relation $relation) {
                     $relation->select(["id", "trade_no"]);
                 }
-            ]);
+            ];
+            if ($withFile) {
+                $relations['file'] = function (Relation $relation) {
+                    $relation->select(["id", "card_id", "name", "size", "downloads", "order_id"]);
+                };
+            }
+            return $builder->with($relations);
         });
+
+        if (is_array($data) && is_array($data['list'] ?? null)) {
+            // The preview download is owner-only; without an id the list shows no download link.
+            $canDownload = (int)($this->getManage()?->type ?? -1) === 0;
+            foreach ($data['list'] as $index => $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $file = $row['file'] ?? null;
+                $data['list'][$index]['file'] = is_array($file) ? [
+                    'id' => $canDownload ? (int)$file['id'] : 0,
+                    'name' => (string)$file['name'],
+                    'size' => (int)$file['size'],
+                    'downloads' => (int)$file['downloads'],
+                    'order_id' => $file['order_id'] === null ? null : (int)$file['order_id'],
+                ] : null;
+            }
+        }
 
         return $this->json(data: $data);
     }
@@ -287,42 +318,10 @@ class Card extends Manage
             throw new JSONException("商品不存在");
         }
 
-        $groups = \App\Model\Card::query()
-            ->where("commodity_id", $commodityId)
-            ->selectRaw("race, sku, sum(case when status = 0 then 1 else 0 end) as unsold, sum(case when status = 2 then 1 else 0 end) as locked, sum(case when status = 1 then 1 else 0 end) as sold, count(*) as total")
-            ->groupBy(["race", "sku"])
-            ->orderBy("race")
-            ->get();
+        // Combinations of the current config only (#898), zero-stock ones included, same as the list badge (#985).
+        $list = \App\Util\SkuStock::detail($commodity);
 
-        // 只保留仍存在于商品「当前」SKU 配置里的组合，并按规范化签名归并——
-        // 卡密表会沉淀历史用过的 race/sku（规格改名或删除后旧卡仍在），直接按卡密分组
-        // 会把废弃规格也列出来、且同一规格因 JSON 键序不同出现重复项（issue #898）。
-        $config = \App\Util\Sku::configArray($commodity->config);
-        $merged = [];
-        foreach ($groups as $item) {
-            if (!\App\Util\Sku::comboExists($config, $item->race, $item->sku)) {
-                continue;
-            }
-            $sig = \App\Util\Sku::signature($item->race, $item->sku);
-            if (!isset($merged[$sig])) {
-                $skuArr = \App\Util\Sku::toArray($item->sku);
-                ksort($skuArr);
-                $merged[$sig] = [
-                    "race" => $item->race,
-                    "sku" => $skuArr,
-                    "unsold" => 0,
-                    "locked" => 0,
-                    "sold" => 0,
-                    "total" => 0,
-                ];
-            }
-            $merged[$sig]["unsold"] += (int)$item->unsold;
-            $merged[$sig]["locked"] += (int)$item->locked;
-            $merged[$sig]["sold"] += (int)$item->sold;
-            $merged[$sig]["total"] += (int)$item->total;
-        }
-
-        return $this->json(data: ["name" => strip_tags((string)$commodity->name), "list" => array_values($merged)]);
+        return $this->json(data: ["name" => strip_tags((string)$commodity->name), "list" => $list]);
     }
 
 
@@ -337,10 +336,17 @@ class Card extends Manage
         $raceGetMode = $request->post("race_get_mode", Filter::INTEGER);
         $race = $raceGetMode == 1 ? $request->post("race_input", Filter::NORMAL) : $request->post("race", Filter::NORMAL);
         $sku = $request->post("sku", Filter::NORMAL) ?: [];
-        $cardType = $request->post("card_type", Filter::INTEGER);
+        // 0 = one secret per line, 1 = secret║draft║premium║cost per line, 2 = uploaded archives
+        $cardType = (int)$request->post("card_type", Filter::INTEGER);
 
         if ($commodityId == 0) {
             throw new JSONException('(`･ω･´)请选择商品');
+        }
+        if ($cardType === 2) {
+            return $this->saveFiles((int)$commodityId, $race, $sku);
+        }
+        if ($cardType !== 0 && $cardType !== 1) {
+            throw new JSONException('(`･ω･´)卡密类型不正确');
         }
 
         $rawCards = $request->unsafePost("secret");
@@ -374,9 +380,9 @@ class Card extends Manage
 
             $cardObj = new \App\Model\Card();
 
-            if ($cardType == 0) {
+            if ($cardType === 0) {
                 $cardObj->secret = $cardt;
-            } else {
+            } elseif ($cardType === 1) {
                 //分割
                 $list = explode("║", $cardt);
                 if (count($list) < 2) {
@@ -442,6 +448,182 @@ class Card extends Manage
     }
 
     /**
+     * card_type 2: one card per staged archive (see Admin\Api\CardFile). With "unique", an archive
+     * whose content is already stocked, or repeated within the batch, is skipped and deleted.
+     *
+     * @throws JSONException
+     */
+    private function saveFiles(int $commodityId, mixed $race, mixed $sku): array
+    {
+        $fileIds = $this->fileIds($_POST['files'] ?? []);
+        if ($fileIds === []) {
+            throw new JSONException('(`･ω･´)请先上传压缩包');
+        }
+        if (!\App\Model\Commodity::query()->whereKey($commodityId)->exists()) {
+            throw new JSONException('(`･ω･´)商品不存在');
+        }
+        Schema::ensureCardFileTable();
+
+        $unique = (bool)($_POST['unique'] ?? false);
+        $note = $_POST['note'] ?? null;
+        if ($note !== null && (!is_string($note) || mb_strlen($note) > 64)) {
+            throw new JSONException('备注最多 64 个字符');
+        }
+        $date = Date::current();
+
+        [$success, $error, $duplicates] = DB::transaction(function () use ($fileIds, $unique, $note, $date, $commodityId, $race, $sku): array {
+            $files = \App\Model\CardFile::query()
+                ->whereIn('id', $fileIds)
+                ->where('owner', 0)
+                ->whereNull('card_id')
+                ->whereNull('order_id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            $success = 0;
+            $error = 0;
+            $duplicates = [];
+            $seen = [];
+            foreach ($fileIds as $fileId) {
+                $file = $files->get($fileId);
+                if (!$file) {
+                    $error++; //already stocked, discarded or expired
+                    continue;
+                }
+                $hash = (string)$file->hash;
+                if ($unique && (isset($seen[$hash]) || self::fileHashStocked($hash))) {
+                    $duplicates[] = $fileId;
+                    $error++;
+                    continue;
+                }
+
+                try {
+                    DB::transaction(function () use ($file, $note, $date, $commodityId, $race, $sku): void {
+                        $cardObj = new \App\Model\Card();
+                        $cardObj->secret = mb_substr((string)$file->name, 0, 760);
+                        $cardObj->commodity_id = $commodityId;
+                        $cardObj->owner = 0;
+                        if ($note !== null) {
+                            $cardObj->note = $note;
+                        }
+                        $cardObj->status = 0;
+                        $cardObj->sku = $sku;
+                        $cardObj->create_time = $date;
+                        if ($race) {
+                            $cardObj->race = $race;
+                        }
+                        $cardObj->save();
+                        $cardId = (int)$cardObj->id;
+
+                        // A recycled card id must never inherit an archive of a deleted card.
+                        \App\Model\CardFile::query()->where('card_id', $cardId)->update(['card_id' => null]);
+                        $bound = \App\Model\CardFile::query()
+                            ->whereKey($file->id)
+                            ->whereNull('card_id')
+                            ->whereNull('order_id')
+                            ->update(['card_id' => $cardId]);
+                        if ($bound !== 1) {
+                            throw new \RuntimeException('archive is no longer staged');
+                        }
+                    });
+                    $seen[$hash] = true;
+                    $success++;
+                } catch (\Throwable $e) {
+                    $error++;
+                }
+            }
+            return [$success, $error, $duplicates];
+        });
+
+        if ($duplicates !== []) {
+            Purge::staged($duplicates);
+        }
+        if ($success > 0) {
+            $ebIds = [$commodityId];
+            $ebReason = 'import';
+            hook(\App\Consts\Hook::CARD_CHANGE_AFTER, $ebIds, $ebReason);
+        }
+        $count = count($fileIds);
+        ManageLog::log($this->getManage(), "[导入文件卡密]共计导入:{$count}张卡密，成功:{$success}张，失败：{$error}张");
+        return $this->json(200, "共计导入:{$count}张卡密，成功:{$success}张，失败：{$error}张", [
+            'count' => $count,
+            'success' => $success,
+            'error' => $error,
+            'duplicate' => count($duplicates),
+        ]);
+    }
+
+    /**
+     * @param mixed $value array or comma separated card_file ids
+     * @return int[]
+     * @throws JSONException
+     */
+    private function fileIds(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = trim($value) === '' ? [] : explode(',', $value);
+        }
+        if (!is_array($value)) {
+            $value = [$value];
+        }
+
+        $ids = [];
+        foreach ($value as $candidate) {
+            if (is_int($candidate)) {
+                $id = $candidate;
+            } elseif (is_string($candidate) && preg_match('/^\d{1,10}$/D', trim($candidate))) {
+                $id = (int)trim($candidate);
+            } else {
+                throw new JSONException('文件 ID 必须是正整数');
+            }
+            if ($id <= 0) {
+                throw new JSONException('文件 ID 必须是正整数');
+            }
+            $ids[$id] = $id;
+        }
+        if (count($ids) > self::MAX_BATCH_COUNT) {
+            throw new JSONException('单次最多导入 ' . self::MAX_BATCH_COUNT . ' 个压缩包');
+        }
+        return array_values($ids);
+    }
+
+    /** Whether an archive with this content already backs a system card. */
+    private static function fileHashStocked(string $hash): bool
+    {
+        return \App\Model\CardFile::query()
+            ->where('owner', 0)
+            ->where('hash', $hash)
+            ->whereNotNull('card_id')
+            ->whereHas('card', static function (Builder $query): void {
+                $query->where('owner', 0);
+            })
+            ->exists();
+    }
+
+    private static function cardHasFile(int $cardId): bool
+    {
+        return Schema::tableExists('card_file')
+            && \App\Model\CardFile::query()->where('card_id', $cardId)->exists();
+    }
+
+    /**
+     * The edit form posts every field back; an untouched secret of a file card is not a change.
+     * $_POST went through the WAF (HTML-escaped), the raw body did not: accept either form.
+     */
+    private function secretUnchanged(string $current): bool
+    {
+        $current = trim($current);
+        $escaped = htmlspecialchars($current, ENT_QUOTES, 'UTF-8');
+        foreach ([$this->request->unsafePost('secret'), $_POST['secret'] ?? null] as $value) {
+            if (is_string($value) && in_array(trim($value), [$current, $escaped], true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * @return array
      * @throws JSONException
      */
@@ -460,6 +642,12 @@ class Card extends Manage
         $map = array_intersect_key($_POST, array_flip($allowed));
         if ($map === []) {
             throw new JSONException('没有可保存的卡密字段');
+        }
+        if (array_key_exists('secret', $map) && self::cardHasFile($id)) {
+            if (!$this->secretUnchanged((string)$card->secret)) {
+                throw new JSONException('文件卡密的内容是压缩包，不能直接修改；如需更换请删除后重新上传');
+            }
+            unset($map['secret']);
         }
         if (array_key_exists('secret', $map)) {
             $secret = trim((string)$map['secret']);
@@ -637,6 +825,10 @@ class Card extends Manage
         });
 
         $deletedCount = $impact['deleted_count'];
+        if ($deletedCount > 0) {
+            // File cards: unsold archives go with their cards, delivered ones stay downloadable.
+            Purge::forCards($impact['deletable_ids']);
+        }
         if ($deletedCount > 0 && $affectedCommodityIds !== []) {
             $ebReason = 'delete';
             hook(\App\Consts\Hook::CARD_CHANGE_AFTER, $affectedCommodityIds, $ebReason);

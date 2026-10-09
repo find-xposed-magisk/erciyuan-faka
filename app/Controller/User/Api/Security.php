@@ -11,6 +11,7 @@ use App\Service\Sms;
 use App\Service\UserWebauthnService;
 use App\Util\Captcha;
 use App\Util\QrCode;
+use App\Util\StepUp;
 use App\Util\Str;
 use App\Util\Validation;
 use Kernel\Annotation\Inject;
@@ -43,26 +44,49 @@ class Security extends User
     }
 
     /**
+     * 个人资料与收款方式。改收款账号（支付宝 / 微信收款码 / USDT 地址）要先过步进验证：只凭会话
+     * （可能经 XSS / 共享设备被窃）就能把佣金兑现改到别人账户上；改昵称、头像、结算方式不需要。
      * @return array
      * @throws JSONException
      */
     public function personal(): array
     {
         $user = $this->getUser();
+        $posted = (array)$this->request->post();
         $user->avatar = $this->request->post("avatar");
         $user->qq = $this->request->post("qq");
-        $user->alipay = $this->request->post("alipay");
         $user->nicename = $this->request->post("nicename");
-        $user->settlement = $this->request->post("settlement", Filter::INTEGER);
-        $user->wallet_address = $this->request->post("wallet_address");
 
-        if (!in_array($user->settlement, [0, 1, 3])) {
-            throw new JSONException("不支持的结算方式");
+        //结算方式与收款账号只改表单里带了的：没带的保留原值（有的主题表单不带 settlement，以前写成 NULL 直接 500），
+        //也不会因为某个主题少了一个框就把收款账号清空、或被当成「改了收款账号」
+        if (array_key_exists('settlement', $posted)) {
+            $user->settlement = $this->request->post("settlement", Filter::INTEGER);
+            if (!in_array($user->settlement, [0, 1, 3], true)) {
+                throw new JSONException("不支持的结算方式");
+            }
         }
 
-        //wallet_address 是 varchar(64)，超长直接入库会触发 MySQL 1406→500。提前给出干净的业务错误。
-        if (mb_strlen((string)$user->wallet_address) > 64) {
-            throw new JSONException("钱包地址过长");
+        $payoutChanged = false;
+        foreach (['alipay', 'wallet_address'] as $field) {
+            if (!array_key_exists($field, $posted)) {
+                continue;
+            }
+            $value = (string)$this->request->post($field);
+            //两列都是 varchar(64)，超长直接入库会触发 MySQL 1406→500。提前给出干净的业务错误。
+            if (mb_strlen($value) > 64) {
+                throw new JSONException($field === 'alipay' ? "支付宝账号过长" : "钱包地址过长");
+            }
+            if ($value !== (string)$user->$field) {
+                $payoutChanged = true;
+            }
+            $user->$field = $value;
+        }
+
+        $wechatImage = null;
+        $wechat = trim((string)$this->request->post("wechat"));
+        if ($wechat !== '' && !$this->isCurrentWechat($wechat, (string)$user->wechat)) {
+            $wechatImage = $this->uploadedQrImage($wechat);
+            $payoutChanged = true;
         }
 
         $plugin = (array)$this->request->post("plugin");
@@ -93,6 +117,7 @@ class Security extends User
             'alipay',
             'wechat',
             'settlement',
+            'wallet_address',
             'totp_secret',
             'totp_recovery',
             'fund_2fa',
@@ -120,28 +145,99 @@ class Security extends User
                 throw new JSONException('字段格式错误：' . $key);
             }
 
-            if (in_array($key, $fields)) {
-                throw new JSONException("are you an idiot?");
+            //oauth2_* / cauth_* 是第三方登录的绑定标识：能直接写就等于给自己的 QQ / Telegram 等账号开一条登录后门，
+            //只能走各登录插件自己的绑定流程
+            if (in_array($key, $fields) || str_starts_with($key, 'oauth2_') || str_starts_with($key, 'cauth_')) {
+                throw new JSONException("非法字段名");
             }
 
             $user->$key = $val;
         }
 
-        $wechat = $this->request->post("wechat");
-        if ($wechat != "") {
+        if ($payoutChanged && !StepUp::verified($user)) {
+            return $this->json(StepUp::CODE, "修改收款账号前需要先验证身份", ['method' => StepUp::method($user)]);
+        }
 
-            $qrCode = QrCode::parse(BASE_PATH . $wechat);
-
-            if ($qrCode == "") {
+        if ($wechatImage !== null) {
+            try {
+                $qrCode = trim(QrCode::parse($wechatImage));
+            } catch (\Throwable $e) {
+                $qrCode = '';
+            }
+            //wechat 是 varchar(255)
+            if ($qrCode === '' || mb_strlen($qrCode) > 255) {
                 throw new JSONException("您上传的微信二维码错误。");
             }
-
             $user->wechat = $qrCode;
         }
 
         $user->save();
-        \App\Model\UserLog::write($user, 'settlement', '修改了个人资料/结算方式');
+        if ($payoutChanged) {
+            \App\Model\UserLog::write($user, 'settlement', '修改了收款账号（已通过身份验证）', 1);
+        } else {
+            \App\Model\UserLog::write($user, 'settlement', '修改了个人资料/结算方式');
+        }
         return $this->json(200, "修改成功");
+    }
+
+    /**
+     * 有的主题把已绑定的收款码内容原样回填在隐藏框里一起提交：和现值一样就是没换，不当成新上传的图片路径。
+     */
+    private function isCurrentWechat(string $submitted, string $stored): bool
+    {
+        if ($stored === '') {
+            return false;
+        }
+        return $submitted === htmlspecialchars(strip_tags($stored), ENT_QUOTES, 'UTF-8')
+            || trim((string)$this->request->unsafePost('wechat')) === $stored;
+    }
+
+    /**
+     * 微信收款码只认上传目录里真实存在的图片：拒绝 ..、其它目录与非图片。二维码识别会把整张图解进内存，
+     * 文件大小与宽高也要限住。返回图片的绝对路径。
+     * @throws JSONException
+     */
+    private function uploadedQrImage(string $path): string
+    {
+        $pattern = '#^/assets/cache/(?:user/\d+/images?|general/image|images)/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.(?:png|jpe?g|gif|bmp|webp)$#iD';
+        $root = realpath(BASE_PATH . '/assets/cache');
+        $file = preg_match($pattern, $path) === 1 ? realpath(BASE_PATH . $path) : false;
+        if ($root === false || $file === false || !is_file($file) || !str_starts_with($file, $root . DIRECTORY_SEPARATOR)) {
+            throw new JSONException("微信收款码图片无效，请重新上传");
+        }
+
+        $size = filesize($file);
+        $info = @getimagesize($file);
+        if ($size === false || $size > 2 * 1024 * 1024 || !is_array($info)
+            || $info[0] < 1 || $info[1] < 1 || $info[0] > 4096 || $info[1] > 4096) {
+            throw new JSONException("微信收款码图片无效或尺寸过大，请重新上传");
+        }
+        return $file;
+    }
+
+    /**
+     * 步进验证：改收款账号等敏感操作前确认是本人。开了两步验证校验动态码，没开校验登录密码；
+     * 与改密 / 改绑共用 secstep 限流。通过后开启 5 分钟窗口（与资金操作二次验证共用），前端随后重放原请求。
+     * @return array
+     * @throws JSONException
+     */
+    public function stepVerify(): array
+    {
+        if (strtoupper($this->request->method()) !== 'POST') {
+            throw new JSONException("请求方式不正确");
+        }
+        $user = \App\Model\User::query()->find($this->getUser()->id);
+        $throttleKey = $this->stepThrottle((int)$user->id);
+        if (StepUp::method($user) === StepUp::METHOD_TOTP) {
+            if (!\App\Util\Totp::verifyAndConsume((string)$user->totp_secret, trim((string)($_POST['code'] ?? '')), "user:" . (int)$user->id)) {
+                throw new JSONException("动态码不正确");
+            }
+        } elseif (!Str::verifyPassword((string)$user->password, (string)$user->salt, (string)($_POST['password'] ?? ''), (string)$this->request->unsafePost('password'))) {
+            throw new JSONException("登录密码不正确");
+        }
+        \App\Util\Throttle::clear($throttleKey);
+        StepUp::markVerified($user);
+        return $this->json(200, "验证成功");
     }
 
     /**
@@ -240,6 +336,12 @@ class Security extends User
         if (\App\Model\User::query()->where("email", $_POST['email'])->first()) {
             throw new JSONException("该邮箱已被他人绑定");
         }
+        //发码限流：不走会话(换 cookie 可绕)，按 IP + 目标邮箱双维拦，防刷邮件
+        $ip = \App\Util\Client::getAddress();
+        if (\App\Util\Throttle::tooMany("sendcode:ip:{$ip}", 10, 600)
+            || \App\Util\Throttle::tooMany("sendcode:email:" . md5(strtolower(trim((string)$_POST['email']))), 3, 600)) {
+            throw new JSONException("验证码发送过于频繁，请稍后再试");
+        }
         $this->email->sendCaptcha((string)$_POST['email'], Email::CAPTCHA_BIND_NEW);
         Captcha::destroy("emailBindNew");
         return $this->json(200, "验证码发送成功");
@@ -262,6 +364,12 @@ class Security extends User
             throw new JSONException("该手机已被他人绑定");
         }
 
+        //短信发码更贵：IP + 目标手机双维限流(不走会话)，防刷短信烧钱
+        $ip = \App\Util\Client::getAddress();
+        if (\App\Util\Throttle::tooMany("sendcode:ip:{$ip}", 10, 600)
+            || \App\Util\Throttle::tooMany("sendcode:phone:" . md5(trim((string)$_POST['phone'])), 3, 600)) {
+            throw new JSONException("验证码发送过于频繁，请稍后再试");
+        }
         $this->sms->sendCaptcha((string)$_POST['phone'], Sms::CAPTCHA_BIND_NEW);
         Captcha::destroy("phoneBindNew");
         return $this->json(200, "验证码发送成功");
@@ -431,7 +539,7 @@ class Security extends User
             throw new JSONException("验证过于频繁，请稍后再试");
         }
         if (!\App\Util\Totp::verifyAndConsume((string)$user->totp_secret, trim((string)($_POST['code'] ?? '')), "user:" . (int)$user->id)) {
-            throw new JSONException("验证码错误");
+            throw new JSONException("动态码不正确");
         }
         \App\Util\FundGuard::markVerified((int)$user->id);
         \App\Util\Throttle::clear("fundverify:uid:" . (int)$user->id);

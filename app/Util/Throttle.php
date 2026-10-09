@@ -78,6 +78,32 @@ class Throttle
     }
 
     /**
+     * 只读查看某个 key 在当前窗口内是否已记满 $limit 次（本次不计数）。
+     * 配合「只在失败时调用 tooMany 记一次」使用：正常请求不占配额，失败满额后连成功的尝试也先拦下。
+     * @param string $key
+     * @param int $limit
+     * @return bool
+     */
+    public static function reached(string $key, int $limit): bool
+    {
+        $fp = @fopen(BASE_PATH . '/runtime/throttle/' . md5($key), 'r');
+        if ($fp === false) {
+            return false;
+        }
+        try {
+            if (!flock($fp, LOCK_SH)) {
+                return false;
+            }
+            $contents = (string)stream_get_contents($fp);
+            flock($fp, LOCK_UN);
+        } finally {
+            fclose($fp);
+        }
+        $rec = $contents !== '' ? json_decode((string)base64_decode($contents), true) : null;
+        return is_array($rec) && (int)($rec['r'] ?? 0) > time() && (int)($rec['c'] ?? 0) >= $limit;
+    }
+
+    /**
      * 清除某个 key 的计数（如登录/验证成功后重置）。
      * @param string $key
      */

@@ -122,6 +122,14 @@ interface Hook
 
     const USER_VIEW_MENU = 0x57;
 
+    /**
+     * 充值页的支付方式列表（/user/api/recharge/pay），出口翻译之前。传参 array &$list
+     *
+     * 与 USER_API_INDEX_PAY_LIST 同构：每项 {id, name, icon, handle}，订阅方按需删项即可。
+     * 列表只管「看不看得到」，真正的拦截要在 USER_API_RECHARGE_TRADE_BEGIN 里做。
+     */
+    const USER_API_RECHARGE_PAY_LIST = 0x58;
+
     const USER_VIEW_HEADER_NAV = 0x88;
 
     const USER_VIEW_QUERY_TRADE_NO = 0x89;

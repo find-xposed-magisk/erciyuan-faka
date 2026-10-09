@@ -1613,6 +1613,32 @@
 :root[data-theme] .md-secret__btn:hover { background: var(--md-hover-overlay); border-color: rgba(var(--md-primary-rgb), .45); }
 :root[data-theme] .md-secret__btn--primary { background: var(--md-primary); border-color: var(--md-primary); color: var(--md-on-primary); box-shadow: var(--md-e1); }
 :root[data-theme] .md-secret__btn--primary:hover { filter: brightness(1.06); }
+/* File-card rows (acgDelivery, ready.js, compact layout) inside the dialog: MUI tokens */
+:root[data-theme] .md-secret .acg-delivery {
+  --acg-delivery-accent: var(--md-primary);
+  --acg-delivery-accent-soft: rgba(var(--md-primary-rgb), .08);
+  --acg-delivery-on-accent: var(--md-on-primary);
+  --acg-delivery-surface: var(--md-bg);
+  --acg-delivery-border: var(--md-divider);
+  --acg-delivery-radius: var(--md-radius);
+  --acg-delivery-success: var(--md-success);
+  gap: 10px; color: var(--md-on-surface);
+}
+:root[data-theme] .md-secret .acg-delivery__icon { border-radius: var(--md-radius); }
+:root[data-theme] .md-secret .acg-delivery__name { color: var(--md-on-surface); }
+:root[data-theme] .md-secret .acg-delivery__sub,
+:root[data-theme] .md-secret .acg-delivery__url { color: var(--md-on-surface-med); opacity: 1; }
+:root[data-theme] .md-secret .acg-delivery__download,
+:root[data-theme] .md-secret .acg-delivery__copy { padding: 0 16px; border-radius: var(--md-radius); font-weight: 500; }
+/* the global `:root[data-theme] a` primary link colour would paint the label in the button's own fill */
+:root[data-theme] .md-secret .acg-delivery__download,
+:root[data-theme] .md-secret .acg-delivery__download:hover { color: var(--md-on-primary); box-shadow: var(--md-e1); }
+:root[data-theme] .md-secret .acg-delivery__copy { border-color: var(--md-outline); color: var(--md-on-surface); }
+:root[data-theme] .md-secret .acg-delivery__copy:hover { background: var(--md-hover-overlay); border-color: rgba(var(--md-primary-rgb), .45); }
+:root[data-theme] .md-secret .acg-delivery__copy.is-done { color: var(--md-success); border-color: currentColor; }
+:root[data-theme] .md-secret .acg-delivery__download:focus-visible,
+:root[data-theme] .md-secret .acg-delivery__copy:focus-visible,
+:root[data-theme] .md-secret__btn:focus-visible { outline: 2px solid var(--uc-focus, var(--md-primary)); outline-offset: 2px; }
 
 /* 卡密上传示例/提示块 (.uc-cardtip) — 前后台通用、token 驱动明暗(替换裸 bootstrap .translucent 白框/.text-dark/.alert-warning) */
 :root[data-theme] .uc-cardtip { color: var(--md-on-surface-med); font-size: 13px; line-height: 1.7; }

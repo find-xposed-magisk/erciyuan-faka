@@ -650,6 +650,10 @@ class Category extends Manage
             });
         });
 
+        if ($impact['commodity_ids'] !== []) {
+            \App\Util\CardFile\Purge::sweepOrphans();
+        }
+
         //默认分类指向了被删掉的分类：事务提交后清空并重建配置缓存
         //（放在事务外是因为 Config::putMany 会重写 runtime/config，那不是事务的一部分）
         if ($impact['config_reference_ids'] !== []) {

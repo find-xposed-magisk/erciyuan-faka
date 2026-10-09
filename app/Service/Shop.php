@@ -71,11 +71,14 @@ interface Shop
     public function getStockState(int|string|null $stock): int;
 
     /**
+     * 预选卡的溢价与成本；传入本单所选的种类与规格时，同时确认这张卡正是该规格（不符抛异常）。
      * @param int|Commodity|string $commodity
      * @param int $cardId
+     * @param string|null $race
+     * @param array|null $sku
      * @return array
      */
-    public function getDraft(int|Commodity|string $commodity, int $cardId): array;
+    public function getDraft(int|Commodity|string $commodity, int $cardId, ?string $race = null, ?array $sku = null): array;
 
 
     /**

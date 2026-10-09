@@ -31,19 +31,9 @@ class Config extends Manage
 
     public function index(): string
     {
-        $modes = [
-            'REMOTE_ADDR',
-            'HTTP_X_REAL_IP',
-            'HTTP_X_FORWARDED_FOR',
-            'HTTP_CLIENT_IP',
-            'HTTP_X_FORWARDED',
-            'HTTP_X_CLUSTER_CLIENT_IP',
-            'HTTP_FORWARDED_FOR',
-            'HTTP_FORWARDED',
-            'HTTP_CF_CONNECTING_IP'
-        ];
+        $modes = Client::HEADERS;
 
-        for ($i = 0; $i <= 8; $i++) {
+        foreach (array_keys($modes) as $i) {
             $ip = Client::getIp($i);
             $modes[$i] = $modes[$i] . " - " . ($ip ?: "此模式不适用");
         }
@@ -107,18 +97,8 @@ class Config extends Manage
 
     public function security(): string
     {
-        $modes = [
-            'REMOTE_ADDR',
-            'HTTP_X_REAL_IP',
-            'HTTP_X_FORWARDED_FOR',
-            'HTTP_CLIENT_IP',
-            'HTTP_X_FORWARDED',
-            'HTTP_X_CLUSTER_CLIENT_IP',
-            'HTTP_FORWARDED_FOR',
-            'HTTP_FORWARDED',
-            'HTTP_CF_CONNECTING_IP'
-        ];
-        for ($i = 0; $i <= 8; $i++) {
+        $modes = Client::HEADERS;
+        foreach (array_keys($modes) as $i) {
             $ip = Client::getIp($i);
             $modes[$i] = $modes[$i] . " - " . ($ip ?: "此模式不适用");
         }

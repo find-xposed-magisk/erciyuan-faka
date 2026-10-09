@@ -30,6 +30,7 @@
                             <a href="#mobile-setting-theme">#{t("模板与网络")}</a>
                             <a href="#mobile-setting-content">#{t("网站内容")}</a>
                             <a href="#mobile-setting-register">#{t("注册与验证")}</a>
+                            <a href="#mobile-setting-card-file">#{t("文件卡密")}</a>
                             <a href="#mobile-setting-access">#{t("访问状态")}</a>
                         </nav>
                         <!--begin::Card body-->
@@ -476,6 +477,31 @@
                                            min="0" max="31536000" step="1"
                                            class="form-control form-control-lg form-control-solid"
                                            placeholder="#{t('请输入会话保持时间，单位/秒')}" value="#{$config.session_expire|escape:'html'}"/>
+                                </div>
+                                <!--end::Col-->
+                            </div>
+                            <!--end::Input group-->
+
+                            <h2 class="admin-mobile-settings-section-title" id="mobile-setting-card-file"
+                                data-admin-mobile-description="设置文件卡密单个压缩包的大小上限。">#{t("文件卡密")}</h2>
+                            <!--begin::Input group-->
+                            <div class="row mb-6">
+                                <!--begin::Label-->
+                                <label class="col-lg-4 col-form-label  fw-bold fs-6" for="setting-card-file-max-size">#{t("压缩包大小上限")}</label>
+                                <!--end::Label-->
+                                <!--begin::Col-->
+                                <div class="col-lg-8 fv-row">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <input type="number" name="card_file_max_size" id="setting-card-file-max-size"
+                                               inputmode="numeric"
+                                               min="1" max="1024" step="1"
+                                               class="form-control form-control-lg form-control-solid"
+                                               style="max-width:180px;"
+                                               aria-describedby="setting-card-file-max-size-help"
+                                               placeholder="100" value="#{$config.card_file_max_size|default:'100'|escape:'html'}"/>
+                                        <span class="fw-bold fs-6 text-muted">MB</span>
+                                    </div>
+                                    <div class="form-text" id="setting-card-file-max-size-help">#{t("范围 1–1024 MB，默认 100 MB。大文件会自动分片上传，不受服务器单次上传大小的限制。")}</div>
                                 </div>
                                 <!--end::Col-->
                             </div>

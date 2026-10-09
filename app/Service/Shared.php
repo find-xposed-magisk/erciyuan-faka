@@ -83,12 +83,15 @@ interface Shared
     public function draftCard(\App\Model\Shared $shared, string $code, array $map = []): array;
 
     /**
+     * 上游预选卡的溢价；传入本单所选的种类与规格时一并交给上游确认这张卡正是该规格。
      * @param \App\Model\Shared $shared
      * @param string $code
      * @param int $cardId
+     * @param string|null $race
+     * @param array|null $sku
      * @return array
      */
-    public function getDraft(\App\Model\Shared $shared, string $code, int $cardId): array;
+    public function getDraft(\App\Model\Shared $shared, string $code, int $cardId, ?string $race = null, ?array $sku = null): array;
 
 
     /**

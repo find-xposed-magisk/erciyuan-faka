@@ -11,23 +11,38 @@
     };
 
     // 查看卡密弹窗(复用共享 .md-secret,与 purchase.record.js / 后台 trade/order.js 同源)
-    const openSecret = (secret, trade, leave) => {
+    const openSecret = (secret, trade, leave, files) => {
         secret = secret ?? '';
         const escaped = String(secret).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         //发货留言与游客查询页(index/query.js)保持一致，商家富文本原样渲染
         const leaveMessage = leave ? `<div style="margin-top:12px;white-space:pre-line">${leave}</div>` : '';
+        // File cards: same rules as purchase.record.js.
+        const delivery = window.acgDelivery && window.acgDelivery.hasFile(secret) ? window.acgDelivery : null;
+        const view = delivery ? {meta: files, textClass: 'md-secret__code', layout: 'compact', scroll: true} : null;
+        const hasText = !delivery || delivery.textOf(secret).trim() !== '';
+        const plain = delivery ? delivery.plain(secret) : secret;
+        const copyButton = hasText || delivery.files(secret).length > 1
+            ? `<button type="button" class="md-secret__btn" data-act="copy">${util.icon("fa-duotone fa-regular fa-copy")} ${i18n(delivery ? '复制全部' : '复制')}</button>` : '';
+        const downloadButton = !hasText ? '' : delivery
+            ? `<button type="button" class="md-secret__btn" data-act="download">${util.icon("fa-duotone fa-regular fa-file-text")} ${i18n('下载文本')}</button>`
+            : `<button type="button" class="md-secret__btn md-secret__btn--primary" data-act="download">${util.icon("fa-duotone fa-regular fa-download")} ${i18n('下载')}</button>`;
+        const bar = copyButton || downloadButton ? `<div class="md-secret__bar">${copyButton}${downloadButton}</div>` : '';
+        const body = delivery ? delivery.render(secret, view).outerHTML : `<div class="md-secret__code">${escaped}</div>`;
         layer.open({
             type: 1,
             title: `${util.icon("fa-duotone fa-regular fa-eye")} ${i18n('查看卡密')}`,
             area: util.isPc() ? '480px' : ["100%", "100%"],
             shadeClose: true,
-            content: `<div class="md-secret"><div class="md-secret__code">${escaped}</div><div class="md-secret__bar"><button type="button" class="md-secret__btn" data-act="copy">${util.icon("fa-duotone fa-regular fa-copy")} ${i18n('复制')}</button><button type="button" class="md-secret__btn md-secret__btn--primary" data-act="download">${util.icon("fa-duotone fa-regular fa-download")} ${i18n('下载')}</button></div>${leaveMessage}</div>`,
+            content: `<div class="md-secret${delivery ? ' md-secret--files' : ''}">${body}${bar}${leaveMessage}</div>`,
             success: (layero) => {
+                if (delivery) {
+                    layero.find('.md-secret > .acg-delivery').replaceWith(delivery.render(secret, view));
+                }
                 layero.find('[data-act="copy"]').on('click', () => {
-                    util.copyTextToClipboard(secret, () => message.success('卡密已复制'));
+                    util.copyTextToClipboard(plain, () => message.success(delivery ? '已复制' : '卡密已复制'), delivery ? () => message.error('复制失败') : null);
                 });
                 layero.find('[data-act="download"]').on('click', () => {
-                    const blob = new Blob([secret], {type: 'text/plain;charset=utf-8'});
+                    const blob = new Blob([plain], {type: 'text/plain;charset=utf-8'});
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
@@ -90,7 +105,7 @@
                     class: "text-primary",
                     title: "查看卡密",
                     show: _ => _.status == 1 && !!_.secret,
-                    click: (event, value, map, index) => openSecret(map.secret, map.trade_no, map?.commodity?.leave_message)
+                    click: (event, value, map, index) => openSecret(map.secret, map.trade_no, map?.commodity?.leave_message, map.delivery_files)
                 }
             ]
         }

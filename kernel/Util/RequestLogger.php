@@ -119,14 +119,14 @@ class RequestLogger
                 'method' => $_SERVER['REQUEST_METHOD'] ?? '',
                 'uri' => self::maskUri((string)($_SERVER['REQUEST_URI'] ?? '')),
                 'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? '',
-                'referer' => $_SERVER['HTTP_REFERER'] ?? '',
+                'referer' => self::maskDownloadTokens((string)($_SERVER['HTTP_REFERER'] ?? '')),
                 // 敏感字段脱敏：避免明文密钥/密码/令牌/会话 Cookie 落盘（历史泄露根因）
-                'get' => maskSensitive($request->get()),
-                'post' => maskSensitive($request->post()),
-                'json' => maskSensitive($request->json()),
+                'get' => self::maskDownloadTokensIn(maskSensitive($request->get())),
+                'post' => self::maskDownloadTokensIn(maskSensitive($request->post())),
+                'json' => self::maskDownloadTokensIn(maskSensitive($request->json())),
                 'raw_body' => '', // 原始请求体含明文密钥（如 key=xxx&private_key=xxx），不再记录
                 'cookies' => array_map(static fn($v) => '***', (array)$request->cookie()),
-                'headers' => maskSensitive($request->header())
+                'headers' => self::maskDownloadTokensIn(maskSensitive($request->header()))
             ];
 
             $json = json_encode(
@@ -161,6 +161,7 @@ class RequestLogger
      */
     private static function maskUri(string $uri): string
     {
+        $uri = self::maskDownloadTokens($uri);
         $pos = strpos($uri, '?');
         if ($pos === false) {
             return $uri;
@@ -186,6 +187,31 @@ class RequestLogger
         }
 
         return $path . '?' . implode('&', $parts);
+    }
+
+    /**
+     * File-card download tokens are bearer credentials that live in the URL path
+     * (/download/<48 hex>), where key-based masking cannot see them. Keeps a 6-char prefix.
+     */
+    public static function maskDownloadTokens(string $value): string
+    {
+        if (stripos($value, 'download') === false) {
+            return $value;
+        }
+        return (string)preg_replace('~(download(?:/|%2f))([a-f0-9]{6})[a-f0-9]{42}(?![a-f0-9])~i', '$1$2…', $value);
+    }
+
+    private static function maskDownloadTokensIn(mixed $value): mixed
+    {
+        if (is_string($value)) {
+            return self::maskDownloadTokens($value);
+        }
+        if (is_array($value)) {
+            foreach ($value as $key => $item) {
+                $value[$key] = self::maskDownloadTokensIn($item);
+            }
+        }
+        return $value;
     }
 
     /**

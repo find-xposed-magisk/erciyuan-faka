@@ -19,7 +19,7 @@ class Http
      */
     public static function make(array $opt = []): \GuzzleHttp\Client
     {
-        return new \GuzzleHttp\Client(array_merge(["verify" => false], $opt));
+        return new \GuzzleHttp\Client(array_merge(["verify" => true], $opt));
     }
 
     /**
@@ -38,7 +38,7 @@ class Http
             }
 
             $options = [
-                "verify" => false,
+                "verify" => true,
                 "sink" => $path,
                 "headers" => [
                     "User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"

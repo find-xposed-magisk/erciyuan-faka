@@ -1393,6 +1393,134 @@ footer a {
     line-height: 1.7;
 }
 
+/* ---------- File-card download rows (acgDelivery, ready.js): query page + purchase dialog ---------- */
+body.uc-body {
+    --acg-delivery-accent: var(--md-primary);
+    --acg-delivery-accent-soft: rgba(var(--md-primary-rgb), .07);
+    --acg-delivery-on-accent: var(--md-on-primary);
+    --acg-delivery-surface: var(--uc-field-bg);
+    --acg-delivery-border: var(--glass-border-soft);
+    --acg-delivery-radius: 12px;
+    --acg-delivery-success: #1fa971;
+}
+
+:root[data-theme="dark"] body.uc-body {
+    --acg-delivery-success: #4fd39b;
+}
+
+body.uc-body .acg-delivery__file {
+    margin: 0;
+    line-height: 1.5;
+    box-shadow: var(--glass-hi);
+}
+
+body.uc-body .acg-delivery__icon {
+    box-shadow: inset 0 0 0 1px rgba(var(--md-primary-rgb), .06);
+}
+
+body.uc-body .acg-delivery__name {
+    color: var(--uc-ink);
+}
+
+body.uc-body .acg-delivery__sub,
+body.uc-body .acg-delivery__url {
+    color: var(--uc-ink-med);
+    opacity: 1;
+}
+
+body.uc-body .acg-delivery__url {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+body.uc-body .card-section .acg-delivery__download,
+body.uc-body .card-section .acg-delivery__copy {
+    min-height: 36px;
+    border-radius: 11px;
+}
+
+body.uc-body .card-section .acg-delivery__download {
+    box-shadow: 0 4px 14px rgba(var(--md-primary-rgb), .22);
+}
+
+@media (pointer: coarse) {
+    body.uc-body .card-section .acg-delivery__download,
+    body.uc-body .card-section .acg-delivery__copy {
+        min-height: 40px;
+    }
+}
+
+body.uc-body .acg-delivery__copy {
+    color: var(--uc-ink);
+    border-color: rgba(var(--md-primary-rgb), .16);
+    background: var(--glass-bg-soft);
+}
+
+body.uc-body .acg-delivery__copy:hover {
+    background: rgba(var(--md-primary-rgb), .07);
+}
+
+body.uc-body .acg-delivery__copy.is-done {
+    color: var(--acg-delivery-success);
+    border-color: currentColor;
+}
+
+body.uc-body .acg-delivery__download:focus-visible,
+body.uc-body .acg-delivery__copy:focus-visible {
+    outline-color: var(--uc-focus);
+}
+
+@media (max-width: 520px) {
+    body.uc-body .acg-delivery__file {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+        column-gap: 12px;
+        row-gap: 10px;
+    }
+
+    body.uc-body .acg-delivery__icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    body.uc-body .acg-delivery__actions {
+        grid-column: 2;
+    }
+}
+
+/* Purchase dialog (treasure.show): glass card that stays readable in dark mode */
+body.uc-body .layui-layer-page:has(.acg-secret) {
+    color: var(--uc-ink);
+    background: var(--glass-bg-strong) !important;
+    -webkit-backdrop-filter: var(--glass-filter-strong);
+    backdrop-filter: var(--glass-filter-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    box-shadow: var(--glass-shadow-lg), var(--glass-hi);
+    overflow: hidden;
+}
+
+:root[data-theme="dark"] body.uc-body .layui-layer-page:has(.acg-secret) {
+    background: rgba(28, 32, 41, .9) !important;
+}
+
+body.uc-body .layui-layer-page:has(.acg-secret) .layui-layer-title {
+    color: var(--uc-ink);
+    font-weight: 600;
+    box-shadow: none;
+    border-bottom: 1px solid var(--glass-border-soft) !important;
+}
+
+body.uc-body .layui-layer-page:has(.acg-secret) .layui-layer-title i {
+    color: var(--uc-ink-med);
+}
+
+:root[data-theme="dark"] body.uc-body .layui-layer-page:has(.acg-secret) .layui-layer-close {
+    filter: invert(1);
+}
+
 .password-form .input-group,
 .card-password-section .input-group {
     display: flex;

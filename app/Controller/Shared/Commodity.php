@@ -13,6 +13,7 @@ use App\Model\Category;
 use App\Service\Order;
 use App\Service\Query;
 use App\Service\Shop;
+use App\Util\CardFile\Link;
 use App\Util\Ini;
 use App\Util\SharedPayload;
 use Illuminate\Database\Eloquent\Builder;
@@ -273,7 +274,7 @@ class Commodity extends Shared
             if ($commodity->delivery_way == 0) {
                 $count = Card::query()->where("commodity_id", $commodity->id)->where("status", 0);
 
-                if ($race) {
+                if ($race && \App\Util\Sku::hasCategories(\App\Util\Sku::selectionConfig($commodity))) {
                     $count = $count->where("race", $race);
                 }
 
@@ -403,7 +404,11 @@ class Commodity extends Shared
 
         $commodity = $this->dockedCommodity($map['shared_code'] ?? null);
         $map['item_id'] = $commodity->id;
-        return $this->json(200, 'success', $this->order->trade($this->getUser(), $this->getUserGroup(), $map));
+        $trade = $this->order->trade($this->getUser(), $this->getUserGroup(), $map);
+        // trade() already points file links at the origin this downstream called; the downstream
+        // stores the secret verbatim, so the protocol keeps its old shape.
+        unset($trade['delivery_files']);
+        return $this->json(200, 'success', $trade);
     }
 
 
@@ -440,10 +445,12 @@ class Commodity extends Shared
             $get->setFilterColumns(['draft']);
             $get->setColumn('id', 'draft', 'draft_premium');
 
-            $data = $this->query->get($get, function (Builder $builder) use ($map, $commodity) {
+            //商品现在没有种类时，卡上残留的旧种类不算数（与拉卡同口径）
+            $byRace = \App\Util\Sku::hasCategories(\App\Util\Sku::selectionConfig($commodity));
+            $data = $this->query->get($get, function (Builder $builder) use ($map, $commodity, $byRace) {
                 $builder = $builder->where("commodity_id", $commodity->id)->where("status", 0);
 
-                if (!empty($map['race'])) {
+                if ($byRace && !empty($map['race'])) {
                     $builder = $builder->where("race", $map['race']);
                 }
 
@@ -486,7 +493,11 @@ class Commodity extends Shared
             $widget = null;
         }
 
-        return $this->json(200, 'success', ['secret' => $order->secret, 'widget' => $widget, "status" => $order->status]);
+        $secret = $order->secret;
+        if (is_string($secret)) {
+            [$secret] = Link::decorate($secret);
+        }
+        return $this->json(200, 'success', ['secret' => $secret, 'widget' => $widget, "status" => $order->status]);
     }
 
 
@@ -532,9 +543,15 @@ class Commodity extends Shared
         $map = $this->request->post(flags: Filter::NORMAL);
         $commodity = $this->dockedCommodity($map['code'] ?? null);
 
+        //3.8.4 起的下游询价会带上本单所选的种类与规格，一并确认卡号正是该规格；旧版下游不带，只回溢价
+        //（它下单时仍走本站 trade，那里会再比对）。
+        $selected = array_key_exists('race', $map) || array_key_exists('sku', $map);
+        $race = $selected ? (is_scalar($map['race'] ?? null) ? (string)$map['race'] : '') : null;
+        $sku = $selected ? (is_array($map['sku'] ?? null) ? $map['sku'] : []) : null;
+
         //getDraft() 还带着 card.cost（预选成本），那是本站的成本口径，不出站。
         //下游只读 draft_premium（见 Bind\Shared::getDraft 的消费点）。
-        $draft = $this->shop->getDraft($commodity, (int)$map['card_id']);
+        $draft = $this->shop->getDraft($commodity, (int)$map['card_id'], $race, $sku);
         unset($draft['cost']);
 
         return $this->json(data: $draft);

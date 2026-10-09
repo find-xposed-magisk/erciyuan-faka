@@ -511,14 +511,18 @@ class Shared implements \App\Service\Shared
         return $data;
     }
 
-    public function getDraft(\App\Model\Shared $shared, string $code, int $cardId): array
+    public function getDraft(\App\Model\Shared $shared, string $code, int $cardId, ?string $race = null, ?array $sku = null): array
     {
+        $payload = ["code" => $code, "card_id" => $cardId];
+        //带上本单所选的种类与规格，让 3.8.4 起的上游在询价时就拒绝「规格不符的卡号」，别等付款后上游下单才失败；
+        //更老的上游会忽略这两个参数
+        if ($race !== null || $sku !== null) {
+            $payload["race"] = (string)$race;
+            $payload["sku"] = $sku ?: [];
+        }
         $draft = $this->protocolOf($shared) === self::PROTOCOL_LEGACY
             ? null
-            : $this->postOptional($shared->domain . "/shared/commodity/draft", $shared->app_id, $shared->app_key, [
-                "code" => $code,
-                "card_id" => $cardId
-            ]);
+            : $this->postOptional($shared->domain . "/shared/commodity/draft", $shared->app_id, $shared->app_key, $payload);
 
         if ($draft === null) {
             //≤3.1.1 没有 draft 端点，它那边的 card 表也没有 draft_premium 列——

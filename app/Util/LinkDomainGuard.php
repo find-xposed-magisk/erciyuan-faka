@@ -33,6 +33,26 @@ final class LinkDomainGuard
         return self::allowed(self::normalizeHost($host));
     }
 
+    /**
+     * 后台（/admin/...）提交的内容不受外链白名单约束。
+     *
+     * 白名单只管前台访客、会员能提交的内容；站长和客服在后台写的链接（工单回复、站内信、
+     * 商品描述）必须原样保留——以前请求入口的 xssKiller 不分前后台，后台写的外链会被默默
+     * 剥掉 href，变成点不了的纯文本（issue #988 截图里的网盘链接）。XSS 净化照常进行。
+     *
+     * 只认内核归一化后的路由首段（Kernel 在构造 Request 之前写回 $_GET['s']），与实际分派到的
+     * 控制器一致；后台接口另有登录态校验，伪造路径拿不到后台权限。
+     */
+    public static function adminRequest(): bool
+    {
+        $route = $_GET['s'] ?? '';
+        if (!is_string($route)) {
+            return false;
+        }
+        $first = explode('/', trim($route, " \t\n\r\0\x0B/"), 2)[0];
+        return strtolower(trim($first)) === 'admin';
+    }
+
     private static function normalizeHost(string $authority): string
     {
         $at = strrpos($authority, '@');

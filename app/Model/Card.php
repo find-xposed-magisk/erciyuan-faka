@@ -55,4 +55,10 @@ class Card extends Model
     {
         return $this->hasOne(Order::class, "id", "order_id");
     }
+
+    /** Present only for file-type cards. */
+    public function file(): ?HasOne
+    {
+        return $this->hasOne(CardFile::class, "card_id", "id");
+    }
 }

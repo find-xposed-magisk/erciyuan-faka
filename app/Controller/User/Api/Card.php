@@ -84,6 +84,11 @@ class Card extends User
             throw new JSONException('(`･ω･´)请选择商品');
         }
 
+        // File cards (type 2) are admin-only; merchants import text cards.
+        if ((int)$cardType === 2) {
+            throw new JSONException('(`･ω･´)文件卡密仅支持在管理后台导入');
+        }
+
         if (!\App\Model\Commodity::query()->where("owner", $this->getUser()->id)->where("id", $commodityId)->exists()) {
             throw new JSONException('(`･ω･´)商品不存在');
         }
