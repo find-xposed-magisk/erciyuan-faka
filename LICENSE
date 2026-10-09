@@ -1,3 +1,12 @@
+Copyright (c) 2021 lizhipay
+
+This software is licensed under the MIT License below, with one exception:
+the file kernel/Plugin.php is NOT covered by the MIT License. It is a
+proprietary component and is licensed separately under the terms set out at
+the end of this file.
+
+--------------------------------------------------------------------------------
+
 MIT License
 
 Copyright (c) 2021 lizhipay
@@ -19,3 +28,24 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+Proprietary component: kernel/Plugin.php
+
+Copyright (c) 2021 lizhipay. All rights reserved.
+
+kernel/Plugin.php is the license verification component for paid plugins
+from the app store. It is distributed in encrypted form and is not open source.
+
+1. You may use kernel/Plugin.php only in its original, unmodified form and only
+   as part of this software.
+2. You may delete kernel/Plugin.php at any time. Deleting it does not affect
+   your rights to the rest of this software under the MIT License; the app
+   store and the plugins that depend on it will stop working.
+3. You may not modify, decrypt, decompile, disassemble, reverse engineer, crack
+   or forge kernel/Plugin.php, circumvent its technical protection, or
+   distribute it separately from this software or in modified form.
+4. kernel/Plugin.php is provided "AS IS", without warranty of any kind, and the
+   disclaimer of warranty and limitation of liability of the MIT License above
+   apply to it as well.
